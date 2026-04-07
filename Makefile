@@ -60,7 +60,11 @@ start-moderation: validate ## Start moderation stack only (no gateway)
 	@echo "Moderation service available at: http://localhost:8081"
 	docker-compose $(SHARED) $(MODERATION) up --build
 
-start-daemon: start-http -d ## Start all services in background
+up-build-daemon: validate ## Run: docker-compose ... up --build -d
+	@echo "$(GREEN)Starting all services in detached mode...$(NC)"
+	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) up --build -d
+
+start-daemon: up-build-daemon ## Start all services in background
 	@echo "$(GREEN)Services started in background$(NC)"
 	@sleep 2 && $(MAKE) ps
 
