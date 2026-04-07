@@ -2,6 +2,9 @@ services:
   swagger-ui:
     image: swaggerapi/swagger-ui:v5.17.14
     container_name: swagger-ui
+    cpus: ${SWAGGER_CPUS:-0.25}
+    mem_limit: ${SWAGGER_MEM_LIMIT:-256m}
+    mem_reservation: ${SWAGGER_MEM_RESERVATION:-128m}
     env_file:
       - .env
     ports:

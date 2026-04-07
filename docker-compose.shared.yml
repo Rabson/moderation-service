@@ -2,6 +2,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    cpus: ${REDIS_CPUS:-0.50}
+    mem_limit: ${REDIS_MEM_LIMIT:-512m}
+    mem_reservation: ${REDIS_MEM_RESERVATION:-128m}
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
@@ -16,6 +19,9 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: postgres
+    cpus: ${POSTGRES_CPUS:-1.00}
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1g}
+    mem_reservation: ${POSTGRES_MEM_RESERVATION:-256m}
     environment:
       POSTGRES_USER: moderation
       POSTGRES_PASSWORD: moderation
@@ -34,6 +40,9 @@ services:
   zookeeper:
     image: bitnami/zookeeper:3.9
     container_name: zookeeper
+    cpus: ${ZOOKEEPER_CPUS:-0.50}
+    mem_limit: ${ZOOKEEPER_MEM_LIMIT:-512m}
+    mem_reservation: ${ZOOKEEPER_MEM_RESERVATION:-256m}
     profiles: ["kafka"]
     environment:
       ALLOW_ANONYMOUS_LOGIN: "yes"
@@ -45,6 +54,9 @@ services:
   kafka:
     image: bitnami/kafka:3.7
     container_name: kafka
+    cpus: ${KAFKA_CPUS:-1.50}
+    mem_limit: ${KAFKA_MEM_LIMIT:-6g}
+    mem_reservation: ${KAFKA_MEM_RESERVATION:-4g}
     profiles: ["kafka"]
     depends_on:
       - zookeeper
@@ -52,6 +64,7 @@ services:
       KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
       KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS:--Xms4G -Xmx4G}
       ALLOW_PLAINTEXT_LISTENER: "yes"
     ports:
       - "9092:9092"

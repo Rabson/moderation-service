@@ -4,6 +4,9 @@ services:
       context: ./gateway-service
       dockerfile: Dockerfile
     container_name: gateway-service
+    cpus: ${GATEWAY_CPUS:-0.50}
+    mem_limit: ${GATEWAY_MEM_LIMIT:-512m}
+    mem_reservation: ${GATEWAY_MEM_RESERVATION:-256m}
     env_file:
       - .env
     environment:
@@ -35,6 +38,9 @@ services:
       context: ./api-service
       dockerfile: Dockerfile
     container_name: api-service
+    cpus: ${API_CPUS:-0.50}
+    mem_limit: ${API_MEM_LIMIT:-512m}
+    mem_reservation: ${API_MEM_RESERVATION:-256m}
     env_file:
       - .env
     environment:
