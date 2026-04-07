@@ -6,7 +6,7 @@ services:
     mem_limit: ${SWAGGER_MEM_LIMIT:-256m}
     mem_reservation: ${SWAGGER_MEM_RESERVATION:-128m}
     env_file:
-      - .env
+      - ../.env
     ports:
       - "${SWAGGER_UI_PORT:-8088}:8080"
     environment:
@@ -14,7 +14,7 @@ services:
       SWAGGER_SERVER_HTTP_URL: ${SWAGGER_SERVER_HTTP_URL:-http://localhost:8080}
       SWAGGER_SERVER_HTTPS_URL: ${SWAGGER_SERVER_HTTPS_URL:-https://localhost:443}
     volumes:
-      - ./deploy/swagger/openapi.template.yaml:/tmp/openapi.template.yaml:ro
+      - ../deploy/swagger/openapi.template.yaml:/tmp/openapi.template.yaml:ro
     command:
       - /bin/sh
       - -c

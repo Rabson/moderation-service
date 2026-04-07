@@ -8,11 +8,12 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 # Compose file flags
-SHARED := -f docker-compose.shared.yml
-MODERATION := -f docker-compose.moderation.yml
-GATEWAY := -f docker-compose.gateway.yml
-SSL := -f docker-compose.ssl.yml
-SWAGGER := -f docker-compose.swagger.yml
+SHARED := -f compose/docker-compose.shared.yml
+MODERATION := -f compose/docker-compose.moderation.yml
+GATEWAY := -f compose/docker-compose.gateway.yml
+SSL := -f compose/docker-compose.ssl.yml
+SWAGGER := -f compose/docker-compose.swagger.yml
+ADMIN_UI := -f compose/docker-compose.admin-ui.yml
 BIN_DIR := bin
 
 # Default target
@@ -63,6 +64,8 @@ start-moderation: validate ## Start moderation stack only (no gateway)
 up-build-daemon: validate ## Run: docker-compose ... up --build -d
 	@echo "$(GREEN)Starting all services in detached mode...$(NC)"
 	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) up --build -d
+
+up-core-daemon: up-build-daemon ## Alias: start core stack in detached mode
 
 start-daemon: up-build-daemon ## Start all services in background
 	@echo "$(GREEN)Services started in background$(NC)"
@@ -135,6 +138,10 @@ logs-nginx: ## View nginx SSL proxy logs
 logs-swagger: ## View swagger-ui logs
 	@echo "$(BLUE)Swagger UI logs:$(NC)"
 	docker logs -f swagger-ui
+
+logs-admin-ui: ## View admin-ui logs
+	@echo "$(BLUE)Admin UI logs:$(NC)"
+	docker logs -f admin-ui
 
 ps: ## Show running containers
 	@echo "$(BLUE)Running containers:$(NC)"
@@ -244,6 +251,15 @@ docs-down: ## Stop Swagger UI
 
 docs-openapi: ## Print OpenAPI spec file path
 	@echo "OpenAPI spec: deploy/swagger/openapi.yaml"
+
+admin-ui-up: ## Start Admin UI on http://localhost:8090
+	@echo "$(GREEN)Starting Admin UI...$(NC)"
+	docker-compose $(ADMIN_UI) up -d
+	@echo "Admin UI: http://localhost:8090"
+
+admin-ui-down: ## Stop Admin UI
+	@echo "$(YELLOW)Stopping Admin UI...$(NC)"
+	docker-compose $(ADMIN_UI) down
 
 test: ## Run health checks on all services
 	@echo "$(BLUE)Running health checks...$(NC)"

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moderation Admin UI</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #0b6e4f;
+      --danger: #b91c1c;
+      --border: #e5e7eb;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans", sans-serif;
+      background: linear-gradient(135deg, #eef6ff, #f7fff4);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1000px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    }
+    h1 { margin: 0 0 8px; }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary { background: #334155; }
+    button.danger { background: var(--danger); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      padding: 10px 6px;
+      vertical-align: top;
+    }
+    .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .ok { color: #166534; }
+    .bad { color: #b91c1c; }
+    .msg { margin-top: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Admin Key Manager</h1>
+      <p class="sub">Manage API keys through gateway admin endpoints.</p>
+      <div class="grid">
+        <div>
+          <label for="apiBase">Gateway Base URL</label>
+          <input id="apiBase" value="http://localhost:8080" />
+        </div>
+        <div>
+          <label for="adminSecret">Admin Secret</label>
+          <input id="adminSecret" type="password" placeholder="change-me-in-production" />
+        </div>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <button id="btnTest" class="secondary">Test Connection</button>
+        <button id="btnRefresh">Refresh Keys</button>
+      </div>
+      <div id="status" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Create Key</h2>
+      <div class="grid">
+        <div>
+          <label for="keyName">Name</label>
+          <input id="keyName" placeholder="frontend-app" />
+        </div>
+        <div>
+          <label for="keyRpm">Requests Per Minute</label>
+          <input id="keyRpm" type="number" value="100" min="1" />
+        </div>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <button id="btnCreate">Create Key</button>
+      </div>
+      <div id="createMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Keys</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>RPM</th>
+            <th>Active</th>
+            <th>Created</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="keysBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+
+    function setStatus(text, ok = true) {
+      const s = el("status");
+      s.className = "msg " + (ok ? "ok" : "bad");
+      s.textContent = text;
+    }
+
+    function headers() {
+      return {
+        "Content-Type": "application/json",
+        "X-Admin-Secret": el("adminSecret").value.trim(),
+      };
+    }
+
+    function baseUrl() {
+      return el("apiBase").value.trim().replace(/\/$/, "");
+    }
+
+    async function testConnection() {
+      try {
+        const res = await fetch(baseUrl() + "/healthz");
+        if (!res.ok) throw new Error("healthz failed");
+        setStatus("Gateway reachable.", true);
+      } catch (e) {
+        setStatus("Gateway unreachable: " + e.message, false);
+      }
+    }
+
+    async function loadKeys() {
+      try {
+        const res = await fetch(baseUrl() + "/admin/keys", { headers: headers() });
+        if (!res.ok) {
+          const t = await res.text();
+          throw new Error("list failed: " + t);
+        }
+        const data = await res.json();
+        const keys = data.keys || [];
+        const body = el("keysBody");
+        body.innerHTML = "";
+        for (const k of keys) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="mono">${k.id || ""}</td>
+            <td>${k.name || ""}</td>
+            <td>${k.requests_per_minute ?? ""}</td>
+            <td>${k.is_active ? "yes" : "no"}</td>
+            <td class="mono">${k.created_at || ""}</td>
+            <td>
+              <button class="danger" ${k.is_active ? "" : "disabled"} data-id="${k.id}">Deactivate</button>
+            </td>
+          `;
+          body.appendChild(tr);
+        }
+        body.querySelectorAll("button[data-id]").forEach((btn) => {
+          btn.addEventListener("click", () => deactivateKey(btn.dataset.id));
+        });
+        setStatus("Loaded " + keys.length + " key(s).", true);
+      } catch (e) {
+        setStatus(e.message, false);
+      }
+    }
+
+    async function createKey() {
+      const msg = el("createMsg");
+      msg.textContent = "";
+      const payload = {
+        name: el("keyName").value.trim() || "unnamed-key",
+        requests_per_minute: Number(el("keyRpm").value || 100),
+      };
+      try {
+        const res = await fetch(baseUrl() + "/admin/keys", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "create failed");
+        msg.className = "msg ok";
+        msg.textContent = "Created. API key (copy now): " + data.api_key;
+        await loadKeys();
+      } catch (e) {
+        msg.className = "msg bad";
+        msg.textContent = e.message;
+      }
+    }
+
+    async function deactivateKey(id) {
+      try {
+        const res = await fetch(baseUrl() + "/admin/keys/" + id, {
+          method: "DELETE",
+          headers: headers(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "deactivate failed");
+        await loadKeys();
+      } catch (e) {
+        setStatus(e.message, false);
+      }
+    }
+
+    el("btnTest").addEventListener("click", testConnection);
+    el("btnRefresh").addEventListener("click", loadKeys);
+    el("btnCreate").addEventListener("click", createKey);
+  </script>
+</body>
+</html>

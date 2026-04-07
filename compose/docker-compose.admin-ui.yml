@@ -1,0 +1,12 @@
+services:
+  admin-ui:
+    image: nginx:alpine
+    container_name: admin-ui
+    cpus: ${ADMIN_UI_CPUS:-0.10}
+    mem_limit: ${ADMIN_UI_MEM_LIMIT:-128m}
+    mem_reservation: ${ADMIN_UI_MEM_RESERVATION:-64m}
+    ports:
+      - "${ADMIN_UI_PORT:-8090}:80"
+    volumes:
+      - ../admin-ui/index.html:/usr/share/nginx/html/index.html:ro
+    restart: unless-stopped

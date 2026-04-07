@@ -1,14 +1,14 @@
 services:
   moderation-service:
     build:
-      context: ./moderation-service
+      context: ../moderation-service
       dockerfile: Dockerfile
     container_name: moderation-service
     cpus: ${MODERATION_CPUS:-1.00}
     mem_limit: ${MODERATION_MEM_LIMIT:-1g}
     mem_reservation: ${MODERATION_MEM_RESERVATION:-512m}
     env_file:
-      - .env
+      - ../.env
     environment:
       MODERATION_PORT: ${MODERATION_PORT:-8081}
       MODERATION_REQUEST_TIMEOUT: ${MODERATION_REQUEST_TIMEOUT:-90s}

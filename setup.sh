@@ -31,9 +31,9 @@ case $choice in
         echo "  - PostgreSQL:  localhost:5432"
         echo "  - Redis:       localhost:6379"
         echo ""
-        docker-compose -f docker-compose.shared.yml \
-                        -f docker-compose.moderation.yml \
-                        -f docker-compose.gateway.yml \
+        docker-compose -f compose/docker-compose.shared.yml \
+                -f compose/docker-compose.moderation.yml \
+                -f compose/docker-compose.gateway.yml \
                         up --build
         ;;
     2)
@@ -61,17 +61,17 @@ case $choice in
         echo "  - Ollama:         http://localhost:11434 (internal)"
         echo ""
         
-        docker-compose -f docker-compose.shared.yml \
-                        -f docker-compose.moderation.yml \
-                        -f docker-compose.gateway.yml \
-                        -f docker-compose.ssl.yml \
+        docker-compose -f compose/docker-compose.shared.yml \
+                -f compose/docker-compose.moderation.yml \
+                -f compose/docker-compose.gateway.yml \
+                -f compose/docker-compose.ssl.yml \
                         up --build
         ;;
     3)
         echo ""
         echo "Starting Moderation + Shared (no gateway)..."
-        docker-compose -f docker-compose.shared.yml \
-                        -f docker-compose.moderation.yml \
+        docker-compose -f compose/docker-compose.shared.yml \
+                -f compose/docker-compose.moderation.yml \
                         up --build
         ;;
     4)
@@ -79,16 +79,16 @@ case $choice in
         echo "📋 Available services:"
         echo ""
         echo "Shared Infrastructure:"
-        docker-compose -f docker-compose.shared.yml config --services | sed 's/^/  - /'
+        docker-compose -f compose/docker-compose.shared.yml config --services | sed 's/^/  - /'
         echo ""
         echo "Moderation Stack:"
-        docker-compose -f docker-compose.moderation.yml config --services | sed 's/^/  - /'
+        docker-compose -f compose/docker-compose.moderation.yml config --services | sed 's/^/  - /'
         echo ""
         echo "Gateway & API:"
-        docker-compose -f docker-compose.gateway.yml config --services | sed 's/^/  - /'
+        docker-compose -f compose/docker-compose.gateway.yml config --services | sed 's/^/  - /'
         echo ""
         echo "Optional SSL (nginx):"
-        docker-compose -f docker-compose.ssl.yml config --services | sed 's/^/  - /'
+        docker-compose -f compose/docker-compose.ssl.yml config --services | sed 's/^/  - /'
         ;;
     *)
         echo "Invalid choice"

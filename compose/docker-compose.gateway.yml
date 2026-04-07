@@ -1,14 +1,14 @@
 services:
   gateway-service:
     build:
-      context: ./gateway-service
+      context: ../gateway-service
       dockerfile: Dockerfile
     container_name: gateway-service
     cpus: ${GATEWAY_CPUS:-0.50}
     mem_limit: ${GATEWAY_MEM_LIMIT:-512m}
     mem_reservation: ${GATEWAY_MEM_RESERVATION:-256m}
     env_file:
-      - .env
+      - ../.env
     environment:
       GATEWAY_PORT: ${GATEWAY_PORT:-8080}
       UPSTREAM_URL: ${UPSTREAM_URL:-http://api-service:8080}
@@ -35,14 +35,14 @@ services:
 
   api-service:
     build:
-      context: ./api-service
+      context: ../api-service
       dockerfile: Dockerfile
     container_name: api-service
     cpus: ${API_CPUS:-0.50}
     mem_limit: ${API_MEM_LIMIT:-512m}
     mem_reservation: ${API_MEM_RESERVATION:-256m}
     env_file:
-      - .env
+      - ../.env
     environment:
       API_PORT: ${API_PORT:-8080}
       MODERATION_SERVICE_URL: ${MODERATION_SERVICE_URL:-http://moderation-service:8081}
