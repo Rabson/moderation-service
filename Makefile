@@ -12,6 +12,7 @@ SHARED := -f docker-compose.shared.yml
 MODERATION := -f docker-compose.moderation.yml
 GATEWAY := -f docker-compose.gateway.yml
 SSL := -f docker-compose.ssl.yml
+BIN_DIR := bin
 
 # Default target
 .DEFAULT_GOAL := help
@@ -205,9 +206,10 @@ api-moderate: ## Test moderation endpoint (interactive)
 
 build: ## Build Go services only (no Docker)
 	@echo "$(BLUE)Building Go services...$(NC)"
-	@cd gateway-service && go build -o gateway ./cmd/gateway && echo "$(GREEN)✓ gateway-service$(NC)"
-	@cd api-service && go build ./... && echo "$(GREEN)✓ api-service$(NC)"
-	@cd moderation-service && go build ./... && echo "$(GREEN)✓ moderation-service$(NC)"
+	@mkdir -p $(BIN_DIR)
+	@cd gateway-service && go build -o ../$(BIN_DIR)/gateway-service ./cmd/gateway && echo "$(GREEN)✓ gateway-service -> $(BIN_DIR)/gateway-service$(NC)"
+	@cd api-service && go build -o ../$(BIN_DIR)/api-service ./cmd/api && echo "$(GREEN)✓ api-service -> $(BIN_DIR)/api-service$(NC)"
+	@cd moderation-service && go build -o ../$(BIN_DIR)/moderation-service ./cmd/moderation && echo "$(GREEN)✓ moderation-service -> $(BIN_DIR)/moderation-service$(NC)"
 
 validate: ## Validate all docker-compose files
 	@echo "$(BLUE)Validating docker-compose files...$(NC)"
