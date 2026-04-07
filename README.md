@@ -202,3 +202,10 @@ Make shortcuts:
 make docs-up
 make docs-down
 ```
+
+## Run everything
+
+```
+
+docker-compose -f docker-compose.shared.yml -f docker-compose.moderation.yml -f docker-compose.gateway.yml up --build -d
+```
