@@ -16,6 +16,9 @@ import (
 
 type llmClient interface {
 	Classify(ctx context.Context, text string) (Labels, error)
+	Transcribe(ctx context.Context, text string) (string, error)
+	TranscribeAudio(ctx context.Context, audioBase64, format, language string) (string, error)
+	Translate(ctx context.Context, text, targetLanguage string) (string, error)
 }
 
 type cacheClient interface {
@@ -265,4 +268,40 @@ func (e *Engine) ModerateBatch(ctx context.Context, requestID string, texts []st
 		results[r.idx] = r.res
 	}
 	return BatchResult{Results: results}, nil
+}
+
+func (e *Engine) Transcribe(ctx context.Context, text string) (TranscribeResult, error) {
+	llmCtx, cancel := context.WithTimeout(ctx, e.llmTimeout)
+	defer cancel()
+
+	transcript, err := e.llm.Transcribe(llmCtx, text)
+	if err != nil {
+		return TranscribeResult{}, err
+	}
+
+	return TranscribeResult{Transcript: transcript}, nil
+}
+
+func (e *Engine) Translate(ctx context.Context, text, targetLanguage string) (TranslateResult, error) {
+	llmCtx, cancel := context.WithTimeout(ctx, e.llmTimeout)
+	defer cancel()
+
+	translated, err := e.llm.Translate(llmCtx, text, targetLanguage)
+	if err != nil {
+		return TranslateResult{}, err
+	}
+
+	return TranslateResult{Text: translated, TargetLanguage: targetLanguage}, nil
+}
+
+func (e *Engine) TranscribeAudio(ctx context.Context, audioBase64, format, language string) (AudioTranscribeResult, error) {
+	llmCtx, cancel := context.WithTimeout(ctx, e.llmTimeout)
+	defer cancel()
+
+	transcript, err := e.llm.TranscribeAudio(llmCtx, audioBase64, format, language)
+	if err != nil {
+		return AudioTranscribeResult{}, err
+	}
+
+	return AudioTranscribeResult{Transcript: transcript, Language: language}, nil
 }

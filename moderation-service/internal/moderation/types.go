@@ -25,3 +25,32 @@ type Request struct {
 type BatchRequest struct {
 	Texts []string `json:"texts"`
 }
+
+type TranscribeRequest struct {
+	Text string `json:"text"`
+}
+
+type TranscribeResult struct {
+	Transcript string `json:"transcript"`
+}
+
+type TranslateRequest struct {
+	Text           string `json:"text"`
+	TargetLanguage string `json:"target_language"`
+}
+
+type TranslateResult struct {
+	Text           string `json:"text"`
+	TargetLanguage string `json:"target_language"`
+}
+
+type AudioTranscribeRequest struct {
+	AudioBase64 string `json:"audio_base64"`
+	Format      string `json:"format"`
+	Language    string `json:"language"`
+}
+
+type AudioTranscribeResult struct {
+	Transcript string `json:"transcript"`
+	Language   string `json:"language,omitempty"`
+}

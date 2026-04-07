@@ -41,6 +41,9 @@ func (s *Server) buildRouter() chi.Router {
 	r.Get("/healthz", s.health)
 	r.Post("/moderate", s.moderate)
 	r.Post("/moderate/batch", s.moderateBatch)
+	r.Post("/transcribe", s.transcribe)
+	r.Post("/transcribe/audio", s.transcribeAudio)
+	r.Post("/translate", s.translate)
 
 	return r
 }

@@ -65,6 +65,80 @@ func (s *Server) moderateBatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (s *Server) transcribe(w http.ResponseWriter, r *http.Request) {
+	var req moderation.TranscribeRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	req.Text = strings.TrimSpace(req.Text)
+	if req.Text == "" {
+		writeError(w, http.StatusBadRequest, "text is required")
+		return
+	}
+
+	result, err := s.engine.Transcribe(r.Context(), req.Text)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) transcribeAudio(w http.ResponseWriter, r *http.Request) {
+	var req moderation.AudioTranscribeRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 20<<20)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	req.AudioBase64 = strings.TrimSpace(req.AudioBase64)
+	req.Format = strings.TrimSpace(req.Format)
+	req.Language = strings.TrimSpace(req.Language)
+
+	if req.AudioBase64 == "" {
+		writeError(w, http.StatusBadRequest, "audio_base64 is required")
+		return
+	}
+
+	result, err := s.engine.TranscribeAudio(r.Context(), req.AudioBase64, req.Format, req.Language)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) translate(w http.ResponseWriter, r *http.Request) {
+	var req moderation.TranslateRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	req.Text = strings.TrimSpace(req.Text)
+	req.TargetLanguage = strings.TrimSpace(req.TargetLanguage)
+	if req.Text == "" {
+		writeError(w, http.StatusBadRequest, "text is required")
+		return
+	}
+	if req.TargetLanguage == "" {
+		writeError(w, http.StatusBadRequest, "target_language is required")
+		return
+	}
+
+	result, err := s.engine.Translate(r.Context(), req.Text, req.TargetLanguage)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

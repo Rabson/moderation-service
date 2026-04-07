@@ -12,6 +12,7 @@ SHARED := -f docker-compose.shared.yml
 MODERATION := -f docker-compose.moderation.yml
 GATEWAY := -f docker-compose.gateway.yml
 SSL := -f docker-compose.ssl.yml
+SWAGGER := -f docker-compose.swagger.yml
 BIN_DIR := bin
 
 # Default target
@@ -127,6 +128,10 @@ logs-nginx: ## View nginx SSL proxy logs
 	@echo "$(BLUE)Nginx logs:$(NC)"
 	docker logs -f nginx-ssl
 
+logs-swagger: ## View swagger-ui logs
+	@echo "$(BLUE)Swagger UI logs:$(NC)"
+	docker logs -f swagger-ui
+
 ps: ## Show running containers
 	@echo "$(BLUE)Running containers:$(NC)"
 	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E 'NAMES|gateway|api|moderation|redis|postgres|ollama|nginx' || docker ps
@@ -223,6 +228,18 @@ compose-config: ## Show merged compose configuration (HTTP)
 compose-config-https: ## Show merged compose configuration (HTTPS)
 	@echo "$(BLUE)HTTPS Compose Configuration:$(NC)"
 	@docker-compose $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config
+
+docs-up: ## Start Swagger UI on http://localhost:8088
+	@echo "$(GREEN)Starting Swagger UI...$(NC)"
+	docker-compose $(SWAGGER) up -d
+	@echo "Swagger UI: http://localhost:8088"
+
+docs-down: ## Stop Swagger UI
+	@echo "$(YELLOW)Stopping Swagger UI...$(NC)"
+	docker-compose $(SWAGGER) down
+
+docs-openapi: ## Print OpenAPI spec file path
+	@echo "OpenAPI spec: deploy/swagger/openapi.yaml"
 
 test: ## Run health checks on all services
 	@echo "$(BLUE)Running health checks...$(NC)"

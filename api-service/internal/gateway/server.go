@@ -51,13 +51,21 @@ func (s *Server) buildRouter() chi.Router {
 
 	r.Post("/moderate", s.proxy("/moderate"))
 	r.Post("/moderate/batch", s.proxy("/moderate/batch"))
+	r.Post("/transcribe", s.proxy("/transcribe"))
+	r.Post("/transcribe/audio", s.proxy("/transcribe/audio"))
+	r.Post("/translate", s.proxy("/translate"))
 
 	return r
 }
 
 func (s *Server) proxy(path string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, 2<<20))
+		maxRequestBody := int64(2 << 20)
+		if path == "/transcribe/audio" {
+			maxRequestBody = 20 << 20
+		}
+
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBody))
 		if err != nil {
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return

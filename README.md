@@ -179,3 +179,26 @@ Use `.env.example` as source of truth. Important values:
 - `KAFKA_ENABLED`
 - `KAFKA_BROKERS`
 - `KAFKA_TOPIC`
+
+## Swagger Docs
+
+OpenAPI spec is available at:
+
+- `deploy/swagger/openapi.yaml`
+
+Run Swagger UI locally:
+
+```bash
+docker-compose -f docker-compose.swagger.yml up -d
+```
+
+Then open:
+
+- `http://localhost:8088`
+
+Make shortcuts:
+
+```bash
+make docs-up
+make docs-down
+```

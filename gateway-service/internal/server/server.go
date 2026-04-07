@@ -46,11 +46,14 @@ func (s *Server) buildRouter() {
 		jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	// Protected moderation endpoints
-	s.mux.Route("/moderate", func(r chi.Router) {
+	// Protected API endpoints
+	s.mux.Group(func(r chi.Router) {
 		r.Use(apikeyMiddleware(s.store, s.limiter))
-		r.Post("/", s.proxy)
-		r.Post("/batch", s.proxy)
+		r.Post("/moderate", s.proxy)
+		r.Post("/moderate/batch", s.proxy)
+		r.Post("/transcribe", s.proxy)
+		r.Post("/transcribe/audio", s.proxy)
+		r.Post("/translate", s.proxy)
 	})
 
 	// Admin endpoints
