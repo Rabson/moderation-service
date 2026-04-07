@@ -9,6 +9,12 @@ bin/
 # Env files
 .env
 
+# Local database files
+data/postgres/
+data/redis/
+data/zookeeper/
+data/kafka/
+
 # macOS
 .DS_Store
 
