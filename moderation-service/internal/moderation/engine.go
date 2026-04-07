@@ -151,15 +151,18 @@ func (e *Engine) logOutcome(ctx context.Context, requestID, originalText, prepro
 }
 
 func calculateRisk(labels Labels) float64 {
-	risk := labels.Hate*0.4 + labels.Violence*0.3 + labels.Sexual*0.2 + labels.Spam*0.1
+	weighted := labels.Hate*0.4 + labels.Violence*0.3 + labels.Sexual*0.2 + labels.Spam*0.1
+	dominant := max4(labels.Hate, labels.Violence, labels.Sexual, labels.Spam)
+
+	// Keep weighted blending, but never let a strong single unsafe label look low.
+	risk := max2(weighted, dominant)
 	return round2(clamp01(risk))
 }
 
 // decideAction returns the moderation action based on the composite risk score
 // AND the dominant (highest) individual label. This prevents a single high-severity
 // label from being under-counted by the weighted formula.
-// e.g. violence=0.9 gives risk_score=0.27 (weight 0.3) which would otherwise be
-// "allow"; the dominant override promotes it to "block".
+// e.g. violence=0.9 now yields risk_score=0.9 and remains "block".
 func decideAction(risk float64, labels Labels) string {
 	dominant := max4(labels.Hate, labels.Violence, labels.Sexual, labels.Spam)
 
