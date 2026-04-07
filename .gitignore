@@ -1,0 +1,13 @@
+# Binaries
+bin/
+*.out
+*.test
+
+# Go workspace artifacts
+**/vendor/
+
+# Env files
+.env
+
+# macOS
+.DS_Store
