@@ -1,0 +1,138 @@
+package server
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/moderation-llm/gateway-service/internal/apikey"
+)
+
+type Server struct {
+	mux         chi.Router
+	upstreamURL string
+	timeout     time.Duration
+	store       *apikey.Store
+	limiter     *apikey.RateLimiter
+	adminSecret string
+}
+
+func NewServer(upstreamURL string, timeout time.Duration, store *apikey.Store, limiter *apikey.RateLimiter, adminSecret string) *Server {
+	s := &Server{
+		mux:         chi.NewRouter(),
+		upstreamURL: upstreamURL,
+		timeout:     timeout,
+		store:       store,
+		limiter:     limiter,
+		adminSecret: adminSecret,
+	}
+
+	s.buildRouter()
+	return s
+}
+
+func (s *Server) buildRouter() {
+	s.mux.Use(middleware.RequestID)
+	s.mux.Use(middleware.RealIP)
+	s.mux.Use(middleware.Logger)
+	s.mux.Use(middleware.Timeout(s.timeout))
+
+	// Public health check
+	s.mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+
+	// Protected moderation endpoints
+	s.mux.Route("/moderate", func(r chi.Router) {
+		r.Use(apikeyMiddleware(s.store, s.limiter))
+		r.Post("/", s.proxy)
+		r.Post("/batch", s.proxy)
+	})
+
+	// Admin endpoints
+	s.mux.Route("/admin", func(r chi.Router) {
+		r.Use(adminAuthMiddleware(s.adminSecret))
+		r.Post("/keys", s.createKey)
+		r.Get("/keys", s.listKeys)
+		r.Delete("/keys/{id}", s.deactivateKey)
+	})
+}
+
+func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
+	targetURL, err := url.Parse(s.upstreamURL)
+	if err != nil {
+		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": "invalid upstream URL"})
+		return
+	}
+
+	// Strip X-API-Key before forwarding
+	r.Header.Del("X-API-Key")
+
+	// Create reverse proxy
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	proxy.ServeHTTP(w, r)
+}
+
+func (s *Server) ListenAndServe(addr string) error {
+	return http.ListenAndServe(addr, s.mux)
+}
+
+func jsonResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
+}
+
+// Admin handlers
+func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name              string `json:"name"`
+		RequestsPerMinute int    `json:"requests_per_minute"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+
+	if req.RequestsPerMinute == 0 {
+		req.RequestsPerMinute = 100
+	}
+
+	keyInfo, plaintext, err := s.store.Create(r.Context(), req.Name, req.RequestsPerMinute)
+	if err != nil {
+		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	jsonResponse(w, http.StatusCreated, map[string]interface{}{
+		"api_key":             plaintext,
+		"note":                "Store this key securely. You won't be able to see it again.",
+		"id":                  keyInfo.ID,
+		"name":                keyInfo.Name,
+		"requests_per_minute": keyInfo.RequestsPerMinute,
+	})
+}
+
+func (s *Server) listKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := s.store.List(r.Context())
+	if err != nil {
+		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{"keys": keys})
+}
+
+func (s *Server) deactivateKey(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := s.store.Deactivate(r.Context(), id); err != nil {
+		jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{"message": "key deactivated"})
+}
