@@ -1,0 +1,384 @@
+openapi: 3.0.3
+info:
+  title: Moderation LLM Gateway API
+  version: 1.0.0
+  description: |
+    Public API exposed by gateway-service.
+    All protected endpoints require X-API-Key except /healthz and admin endpoints.
+servers:
+  - url: "{scheme}://{host}:{port}"
+    description: Editable gateway server (change in Swagger UI)
+    variables:
+      scheme:
+        default: ${SWAGGER_SERVER_SCHEME}
+        enum: [http, https]
+      host:
+        default: ${SWAGGER_SERVER_HOST}
+      port:
+        default: "${SWAGGER_SERVER_PORT}"
+
+tags:
+  - name: Health
+  - name: Moderation
+  - name: Language
+  - name: Admin
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    AdminSecretAuth:
+      type: apiKey
+      in: header
+      name: X-Admin-Secret
+
+  schemas:
+    Labels:
+      type: object
+      required: [hate, violence, sexual, spam, safe]
+      properties:
+        hate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        violence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        sexual:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        spam:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        safe:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+
+    ModerateRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+
+    ModerateResult:
+      type: object
+      required: [labels, risk_score, action]
+      properties:
+        labels:
+          $ref: '#/components/schemas/Labels'
+        risk_score:
+          type: number
+          format: float
+        action:
+          type: string
+          enum: [allow, review, block]
+
+    ModerateBatchRequest:
+      type: object
+      required: [texts]
+      properties:
+        texts:
+          type: array
+          items:
+            type: string
+          maxItems: 100
+
+    ModerateBatchResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerateResult'
+
+    TranscribeRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+
+    TranscribeResult:
+      type: object
+      required: [transcript]
+      properties:
+        transcript:
+          type: string
+
+    AudioTranscribeRequest:
+      type: object
+      required: [audio_base64]
+      properties:
+        audio_base64:
+          type: string
+          description: Base64 audio payload (or data URI)
+        format:
+          type: string
+          description: Audio format extension, e.g. wav, mp3, m4a
+          example: wav
+        language:
+          type: string
+          description: Optional language hint, e.g. en
+          example: en
+
+    AudioTranscribeResult:
+      type: object
+      required: [transcript]
+      properties:
+        transcript:
+          type: string
+        language:
+          type: string
+
+    TranslateRequest:
+      type: object
+      required: [text, target_language]
+      properties:
+        text:
+          type: string
+        target_language:
+          type: string
+          example: Spanish
+
+    TranslateResult:
+      type: object
+      required: [text, target_language]
+      properties:
+        text:
+          type: string
+        target_language:
+          type: string
+
+    CreateKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        requests_per_minute:
+          type: integer
+          minimum: 1
+          default: 100
+
+    CreateKeyResponse:
+      type: object
+      properties:
+        api_key:
+          type: string
+        note:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        requests_per_minute:
+          type: integer
+
+    ListKeysResponse:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              requests_per_minute:
+                type: integer
+              is_active:
+                type: boolean
+              created_at:
+                type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+
+  /moderate:
+    post:
+      tags: [Moderation]
+      summary: Moderate a single text
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerateRequest'
+      responses:
+        '200':
+          description: Moderation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerateResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid API key
+        '429':
+          description: Rate limit exceeded
+
+  /moderate/batch:
+    post:
+      tags: [Moderation]
+      summary: Moderate multiple texts
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerateBatchRequest'
+      responses:
+        '200':
+          description: Batch moderation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerateBatchResult'
+
+  /transcribe:
+    post:
+      tags: [Language]
+      summary: Normalize text transcription
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranscribeRequest'
+      responses:
+        '200':
+          description: Transcript result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscribeResult'
+
+  /transcribe/audio:
+    post:
+      tags: [Language]
+      summary: Transcribe audio payload
+      description: |
+        Accepts base64-encoded audio and returns transcript text.
+        Current gateway path supports up to 20 MB request size.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioTranscribeRequest'
+      responses:
+        '200':
+          description: Audio transcription result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioTranscribeResult'
+
+  /translate:
+    post:
+      tags: [Language]
+      summary: Translate text
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateRequest'
+      responses:
+        '200':
+          description: Translation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResult'
+
+  /admin/keys:
+    post:
+      tags: [Admin]
+      summary: Create API key
+      security:
+        - AdminSecretAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKeyRequest'
+      responses:
+        '201':
+          description: Key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateKeyResponse'
+    get:
+      tags: [Admin]
+      summary: List API keys
+      security:
+        - AdminSecretAuth: []
+      responses:
+        '200':
+          description: Keys list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListKeysResponse'
+
+  /admin/keys/{id}:
+    delete:
+      tags: [Admin]
+      summary: Deactivate API key
+      security:
+        - AdminSecretAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Key deactivated
+        '404':
+          description: Key not found

@@ -2,10 +2,18 @@ services:
   swagger-ui:
     image: swaggerapi/swagger-ui:v5.17.14
     container_name: swagger-ui
+    env_file:
+      - .env
     ports:
-      - "8088:8080"
+      - "${SWAGGER_UI_PORT:-8088}:8080"
     environment:
-      SWAGGER_JSON: /tmp/openapi.yaml
+      URL: ${SWAGGER_SPEC_URL:-/openapi.yaml}
+      SWAGGER_SERVER_HTTP_URL: ${SWAGGER_SERVER_HTTP_URL:-http://localhost:8080}
+      SWAGGER_SERVER_HTTPS_URL: ${SWAGGER_SERVER_HTTPS_URL:-https://localhost:443}
     volumes:
-      - ./deploy/swagger/openapi.yaml:/tmp/openapi.yaml:ro
+      - ./deploy/swagger/openapi.template.yaml:/tmp/openapi.template.yaml:ro
+    command:
+      - /bin/sh
+      - -c
+      - envsubst < /tmp/openapi.template.yaml > /usr/share/nginx/html/openapi.yaml && /docker-entrypoint.sh nginx -g 'daemon off;'
     restart: unless-stopped
