@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/moderation-llm/gateway-service/internal/apikey"
 )
 
@@ -19,9 +20,10 @@ type Server struct {
 	store       *apikey.Store
 	limiter     *apikey.RateLimiter
 	adminSecret string
+	corsOrigins []string
 }
 
-func NewServer(upstreamURL string, timeout time.Duration, store *apikey.Store, limiter *apikey.RateLimiter, adminSecret string) *Server {
+func NewServer(upstreamURL string, timeout time.Duration, store *apikey.Store, limiter *apikey.RateLimiter, adminSecret string, corsOrigins []string) *Server {
 	s := &Server{
 		mux:         chi.NewRouter(),
 		upstreamURL: upstreamURL,
@@ -29,6 +31,7 @@ func NewServer(upstreamURL string, timeout time.Duration, store *apikey.Store, l
 		store:       store,
 		limiter:     limiter,
 		adminSecret: adminSecret,
+		corsOrigins: corsOrigins,
 	}
 
 	s.buildRouter()
@@ -40,6 +43,13 @@ func (s *Server) buildRouter() {
 	s.mux.Use(middleware.RealIP)
 	s.mux.Use(middleware.Logger)
 	s.mux.Use(middleware.Timeout(s.timeout))
+	s.mux.Use(cors.Handler(cors.Options{
+		AllowedOrigins: s.corsOrigins,
+		AllowedMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-API-Key", "X-Admin-Secret"},
+		ExposedHeaders: []string{"X-RateLimit-Limit", "X-RateLimit-Remaining"},
+		MaxAge:         300,
+	}))
 
 	// Public health check
 	s.mux.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {

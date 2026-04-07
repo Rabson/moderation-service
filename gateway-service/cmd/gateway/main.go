@@ -57,6 +57,7 @@ func main() {
 		store,
 		limiter,
 		cfg.AdminSecret,
+		cfg.CORSAllowedOrigins,
 	)
 
 	addr := fmt.Sprintf(":%d", cfg.GatewayPort)
