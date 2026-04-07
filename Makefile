@@ -1,4 +1,4 @@
-.PHONY: help start start-http start-https start-moderation stop down logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check api-key test validate build compose-config ps status
+.PHONY: help start start-http start-https start-moderation stop down reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check api-key test validate build compose-config ps status
 
 # Color output
 BLUE := \033[0;34m
@@ -27,7 +27,7 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(start|up|build)' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-25s %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)🛑 Stop/Cleanup:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(stop|down|clean|remove)' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-25s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(stop|down|clean|remove|reset)' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-25s %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)📊 Logs & Status:$(NC)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(logs|ps|status)' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-25s %s\n", $$1, $$2}'
@@ -84,6 +84,11 @@ down: ## Stop and remove all containers
 down-ssl: ## Stop services including SSL proxy
 	@echo "$(YELLOW)Stopping all services (including SSL)...$(NC)"
 	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) down
+
+reset-containers: ## Force remove stale project containers by name
+	@echo "$(YELLOW)Removing stale project containers...$(NC)"
+	@docker rm -f gateway-service api-service moderation-service redis postgres ollama ollama-init nginx-ssl nginx-gateway swagger-ui admin-ui zookeeper kafka 2>/dev/null || true
+	@echo "$(GREEN)✓ Stale container cleanup complete$(NC)"
 
 clean: down ## Clean: stop containers and remove volumes
 	@echo "$(RED)Cleaning up: removing volumes...$(NC)"
