@@ -170,12 +170,16 @@ cert: ## Generate self-signed SSL certificate
 	else \
 		echo "$(GREEN)Generating self-signed SSL certificate...$(NC)"; \
 		mkdir -p certs; \
-		SAN_LIST="DNS:$${GATEWAY_DOMAIN:-localhost},DNS:$${DOCS_DOMAIN:-localhost},DNS:localhost,IP:127.0.0.1"; \
+		gateway_domain=$$(grep -E '^GATEWAY_DOMAIN=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+		docs_domain=$$(grep -E '^DOCS_DOMAIN=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+		gateway_domain=$${gateway_domain:-localhost}; \
+		docs_domain=$${docs_domain:-localhost}; \
+		SAN_LIST="DNS:$$gateway_domain,DNS:$$docs_domain,DNS:localhost,IP:127.0.0.1"; \
 		openssl req -x509 -newkey rsa:4096 \
 			-keyout certs/server.key \
 			-out certs/server.crt \
 			-days 365 -nodes \
-			-subj "/CN=$${GATEWAY_DOMAIN:-localhost}" \
+			-subj "/CN=$$gateway_domain" \
 			-addext "subjectAltName=$$SAN_LIST"; \
 		echo "$(GREEN)✓ Certificate created: certs/server.crt$(NC)"; \
 		ls -lh certs/; \
@@ -206,7 +210,9 @@ cert-trust-macos: cert ## Trust local self-signed certificate in macOS Keychain 
 
 cert-untrust-macos: ## Remove trusted local certificate from macOS keychain
 	@echo "$(YELLOW)Removing certs/server.crt from macOS System keychain...$(NC)"
-	@sudo security delete-certificate -c "$${GATEWAY_DOMAIN:-localhost}" /Library/Keychains/System.keychain 2>/dev/null || true
+	@gateway_domain=$$(grep -E '^GATEWAY_DOMAIN=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_domain=$${gateway_domain:-localhost}; \
+	sudo security delete-certificate -c "$$gateway_domain" /Library/Keychains/System.keychain 2>/dev/null || true
 	@echo "$(GREEN)✓ Certificate removal attempted$(NC)"
 
 cert-trust-linux: cert ## Trust local self-signed cert on Linux (Debian/Ubuntu/RHEL/Fedora)
