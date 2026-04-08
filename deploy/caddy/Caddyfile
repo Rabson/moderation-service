@@ -1,0 +1,18 @@
+{$GATEWAY_DOMAIN} {
+    encode gzip zstd
+
+    @moderation path /moderate /moderate/* /transcribe /transcribe/* /translate /translate/* /admin /admin/* /healthz
+    reverse_proxy @moderation gateway-service:8080
+
+    reverse_proxy gateway-service:8080
+}
+
+{$DOCS_DOMAIN} {
+    encode gzip zstd
+
+    handle_path /admin-ui/* {
+        reverse_proxy admin-ui:80
+    }
+
+    reverse_proxy swagger-ui:8080
+}

@@ -1,0 +1,32 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: caddy
+    cpus: ${NGINX_CPUS:-0.10}
+    mem_limit: ${NGINX_MEM_LIMIT:-96m}
+    mem_reservation: ${NGINX_MEM_RESERVATION:-48m}
+    env_file:
+      - ../.env
+    environment:
+      GATEWAY_DOMAIN: ${GATEWAY_DOMAIN:-localhost}
+      DOCS_DOMAIN: ${DOCS_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - gateway-service
+      - swagger-ui
+      - admin-ui
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2019/config/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+
+volumes:
+  caddy_data:
+  caddy_config:

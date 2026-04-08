@@ -1,4 +1,4 @@
-.PHONY: help start start-http start-https start-moderation stop down reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check cert-trust-macos cert-untrust-macos cert-trust-linux cert-untrust-linux api-key api-key-update test validate build compose-config ps status
+.PHONY: help start start-http start-https start-caddy start-moderation stop down down-caddy reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx logs-caddy clean cert cert-check cert-trust-macos cert-untrust-macos cert-trust-linux cert-untrust-linux api-key api-key-update test validate build compose-config compose-config-caddy ps status
 
 # Color output
 BLUE := \033[0;34m
@@ -12,6 +12,7 @@ SHARED := -f compose/docker-compose.shared.yml
 MODERATION := -f compose/docker-compose.moderation.yml
 GATEWAY := -f compose/docker-compose.gateway.yml
 SSL := -f compose/docker-compose.ssl.yml
+CADDY := -f compose/docker-compose.caddy.yml
 SWAGGER := -f compose/docker-compose.swagger.yml
 ADMIN_UI := -f compose/docker-compose.admin-ui.yml
 BIN_DIR := bin
@@ -64,6 +65,13 @@ start-https: cert validate ## Start with HTTPS (port 443, requires SSL cert)
 	@echo "Admin UI will be available at: https://$${DOCS_DOMAIN:-localhost}/admin-ui/"
 	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) up --build
 
+start-caddy: validate ## Start with Caddy + Let's Encrypt (ports 80/443)
+	@echo "$(GREEN)Starting all services with Caddy TLS...$(NC)"
+	@echo "API: https://$${GATEWAY_DOMAIN:-localhost}"
+	@echo "Docs: https://$${DOCS_DOMAIN:-localhost}"
+	@echo "Admin UI: https://$${DOCS_DOMAIN:-localhost}/admin-ui/"
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(CADDY) up --build
+
 start-moderation: validate ## Start moderation stack only (no gateway)
 	@echo "$(GREEN)Starting moderation stack (without gateway)...$(NC)"
 	@echo "Moderation service available at: http://localhost:8081"
@@ -92,6 +100,10 @@ down: ## Stop and remove all containers
 down-ssl: ## Stop services including SSL proxy
 	@echo "$(YELLOW)Stopping all services (including SSL)...$(NC)"
 	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) down
+
+down-caddy: ## Stop services including Caddy TLS proxy
+	@echo "$(YELLOW)Stopping all services (including Caddy)...$(NC)"
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(CADDY) down
 
 reset-containers: ## Force remove stale project containers by name
 	@echo "$(YELLOW)Removing stale project containers...$(NC)"
@@ -147,6 +159,10 @@ logs-postgres: ## View postgres logs
 logs-nginx: ## View nginx SSL proxy logs
 	@echo "$(BLUE)Nginx logs:$(NC)"
 	docker logs -f nginx-ssl
+
+logs-caddy: ## View Caddy logs
+	@echo "$(BLUE)Caddy logs:$(NC)"
+	docker logs -f caddy
 
 logs-swagger: ## View swagger-ui logs
 	@echo "$(BLUE)Swagger UI logs:$(NC)"
@@ -318,6 +334,7 @@ validate: ## Validate all docker-compose files
 	@echo "$(BLUE)Validating docker-compose files...$(NC)"
 	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) config > /dev/null && echo "$(GREEN)✓ HTTP compose valid$(NC)" || echo "$(RED)✗ HTTP compose invalid$(NC)"
 	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) config > /dev/null && echo "$(GREEN)✓ HTTPS compose valid$(NC)" || echo "$(RED)✗ HTTPS compose invalid$(NC)"
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(CADDY) config > /dev/null && echo "$(GREEN)✓ Caddy compose valid$(NC)" || echo "$(RED)✗ Caddy compose invalid$(NC)"
 
 compose-config: ## Show merged compose configuration (HTTP)
 	@echo "$(BLUE)HTTP Compose Configuration:$(NC)"
@@ -326,6 +343,10 @@ compose-config: ## Show merged compose configuration (HTTP)
 compose-config-https: ## Show merged compose configuration (HTTPS)
 	@echo "$(BLUE)HTTPS Compose Configuration:$(NC)"
 	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) config
+
+compose-config-caddy: ## Show merged compose configuration (Caddy)
+	@echo "$(BLUE)Caddy Compose Configuration:$(NC)"
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(CADDY) config
 
 docs-up: ## Start Swagger UI on http://localhost:8088
 	@echo "$(GREEN)Starting Swagger UI...$(NC)"

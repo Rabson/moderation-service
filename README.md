@@ -98,6 +98,9 @@ make test
 - `make docs-down` stop Swagger UI
 - `make admin-ui-up` start separate Admin UI
 - `make admin-ui-down` stop separate Admin UI
+- `make start-caddy` start full stack with Caddy auto TLS (Let's Encrypt)
+- `make down-caddy` stop Caddy TLS stack
+- `make logs-caddy` view Caddy logs
 - `make api-key-update` update existing key (name/rpm/active)
 - `make cert-trust-macos` trust generated self-signed cert in macOS keychain
 - `make cert-untrust-macos` remove trusted local cert from macOS keychain
@@ -197,6 +200,23 @@ Start Kafka profile:
 ```bash
 docker-compose -f compose/docker-compose.shared.yml --profile kafka up -d
 ```
+
+Start Caddy with automatic Let's Encrypt certificates:
+
+```bash
+docker-compose -f compose/docker-compose.shared.yml \
+  -f compose/docker-compose.moderation.yml \
+  -f compose/docker-compose.gateway.yml \
+  -f compose/docker-compose.swagger.yml \
+  -f compose/docker-compose.admin-ui.yml \
+  -f compose/docker-compose.caddy.yml up --build -d
+```
+
+Requirements for Caddy/Let's Encrypt:
+
+- `GATEWAY_DOMAIN` and `DOCS_DOMAIN` must resolve to this server
+- ports `80` and `443` must be publicly reachable
+- do not run `start-https` and `start-caddy` together (both bind `80/443`)
 
 ## LLM Provider Configuration
 
