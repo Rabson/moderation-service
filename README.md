@@ -63,6 +63,7 @@ Gateway base URL: `http://localhost:8080`
 - `POST /translate` (requires `X-API-Key`)
 - `POST /admin/keys` (requires `X-Admin-Secret`)
 - `GET /admin/keys` (requires `X-Admin-Secret`)
+- `PUT /admin/keys/{id}` (requires `X-Admin-Secret`)
 - `DELETE /admin/keys/{id}` (requires `X-Admin-Secret`)
 
 ## Quick Start
@@ -97,6 +98,11 @@ make test
 - `make docs-down` stop Swagger UI
 - `make admin-ui-up` start separate Admin UI
 - `make admin-ui-down` stop separate Admin UI
+- `make api-key-update` update existing key (name/rpm/active)
+- `make cert-trust-macos` trust generated self-signed cert in macOS keychain
+- `make cert-untrust-macos` remove trusted local cert from macOS keychain
+
+Admin key Make commands (`api-key`, `api-key-list`, `api-key-update`, `api-key-delete`) read `ADMIN_SECRET` and `GATEWAY_PORT` from `.env` automatically.
 
 ## Swagger
 
@@ -129,6 +135,7 @@ Use it to:
 - test gateway connectivity
 - list keys
 - create keys
+- update keys (name/rpm/active)
 - deactivate keys
 
 ## Resource and Machine Notes
@@ -233,3 +240,4 @@ These let you use different models/providers per endpoint type (`/moderate`, `/t
 - If browser calls fail from Swagger/Admin UI, ensure `CORS_ALLOWED_ORIGINS` includes the UI origin(s).
 - If SSL stack fails on ports 80/443, another process is using those ports.
 - If audio transcription returns provider errors, set `LLM_TRANSCRIBE_AUDIO_PROVIDER`, `LLM_TRANSCRIBE_AUDIO_API_KEY`, and `OPENAI_API_KEY` as needed.
+- If `curl` fails with self-signed certificate, run `make cert-trust-macos` (macOS) or use `curl --cacert certs/server.crt ...`.

@@ -20,7 +20,7 @@ type APIKey struct {
 	KeyHash           string
 	RequestsPerMinute int
 	IsActive          bool
-	CreatedAt         string
+	CreatedAt         time.Time
 }
 
 type Store struct {
@@ -150,6 +150,12 @@ func (s *Store) List(ctx context.Context) ([]APIKey, error) {
 }
 
 func (s *Store) Deactivate(ctx context.Context, id string) error {
+	var keyHash string
+	err := s.db.QueryRow(ctx, `SELECT key_hash FROM api_keys WHERE id = $1`, id).Scan(&keyHash)
+	if err != nil {
+		return fmt.Errorf("key not found")
+	}
+
 	tag, err := s.db.Exec(ctx, `UPDATE api_keys SET is_active = false WHERE id = $1`, id)
 	if err != nil {
 		return err
@@ -158,7 +164,38 @@ func (s *Store) Deactivate(ctx context.Context, id string) error {
 		return fmt.Errorf("key not found")
 	}
 
-	_ = s.cache.Del(ctx, fmt.Sprintf("apikey:%s", id))
+	_ = s.cache.Del(ctx, fmt.Sprintf("apikey:%s", keyHash))
 
 	return nil
+}
+
+func (s *Store) Update(ctx context.Context, id string, name string, requestsPerMinute int, isActive bool) (*APIKey, error) {
+	var keyHash string
+	err := s.db.QueryRow(ctx, `SELECT key_hash FROM api_keys WHERE id = $1`, id).Scan(&keyHash)
+	if err != nil {
+		return nil, fmt.Errorf("key not found")
+	}
+	var createdAt time.Time
+
+	err = s.db.QueryRow(ctx,
+		`UPDATE api_keys
+		 SET name = $2, requests_per_minute = $3, is_active = $4
+		 WHERE id = $1
+		 RETURNING id, name, requests_per_minute, is_active, created_at`,
+		id, name, requestsPerMinute, isActive).
+		Scan(&id, &name, &requestsPerMinute, &isActive, &createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update key: %w", err)
+	}
+
+	// Invalidate cache so new settings are used immediately.
+	_ = s.cache.Del(ctx, fmt.Sprintf("apikey:%s", keyHash))
+
+	return &APIKey{
+		ID:                id,
+		Name:              name,
+		RequestsPerMinute: requestsPerMinute,
+		IsActive:          isActive,
+		CreatedAt:         createdAt,
+	}, nil
 }

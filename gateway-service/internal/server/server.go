@@ -45,7 +45,7 @@ func (s *Server) buildRouter() {
 	s.mux.Use(middleware.Timeout(s.timeout))
 	s.mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins: s.corsOrigins,
-		AllowedMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-API-Key", "X-Admin-Secret"},
 		ExposedHeaders: []string{"X-RateLimit-Limit", "X-RateLimit-Remaining"},
 		MaxAge:         300,
@@ -71,6 +71,7 @@ func (s *Server) buildRouter() {
 		r.Use(adminAuthMiddleware(s.adminSecret))
 		r.Post("/keys", s.createKey)
 		r.Get("/keys", s.listKeys)
+		r.Put("/keys/{id}", s.updateKey)
 		r.Delete("/keys/{id}", s.deactivateKey)
 	})
 }
@@ -148,4 +149,36 @@ func (s *Server) deactivateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]string{"message": "key deactivated"})
+}
+
+func (s *Server) updateKey(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Name              string `json:"name"`
+		RequestsPerMinute int    `json:"requests_per_minute"`
+		IsActive          bool   `json:"is_active"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+
+	if req.Name == "" || req.RequestsPerMinute <= 0 {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "name and requests_per_minute must be provided"})
+		return
+	}
+
+	key, err := s.store.Update(r.Context(), id, req.Name, req.RequestsPerMinute, req.IsActive)
+	if err != nil {
+		jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"id":                  key.ID,
+		"name":                key.Name,
+		"requests_per_minute": key.RequestsPerMinute,
+		"is_active":           key.IsActive,
+	})
 }

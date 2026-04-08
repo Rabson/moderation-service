@@ -1,4 +1,4 @@
-.PHONY: help start start-http start-https start-moderation stop down reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check api-key test validate build compose-config ps status
+.PHONY: help start start-http start-https start-moderation stop down reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check cert-trust-macos cert-untrust-macos api-key api-key-update test validate build compose-config ps status
 
 # Color output
 BLUE := \033[0;34m
@@ -60,7 +60,9 @@ start-http: validate ## Start with HTTP (port 8080)
 start-https: cert validate ## Start with HTTPS (port 443, requires SSL cert)
 	@echo "$(GREEN)Starting all services (HTTPS)...$(NC)"
 	@echo "Gateway will be available at: https://localhost:443"
-	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) up --build
+	@echo "Swagger UI will be available at: https://$${DOCS_DOMAIN:-localhost}"
+	@echo "Admin UI will be available at: https://$${DOCS_DOMAIN:-localhost}/admin-ui/"
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) up --build
 
 start-moderation: validate ## Start moderation stack only (no gateway)
 	@echo "$(GREEN)Starting moderation stack (without gateway)...$(NC)"
@@ -89,7 +91,7 @@ down: ## Stop and remove all containers
 
 down-ssl: ## Stop services including SSL proxy
 	@echo "$(YELLOW)Stopping all services (including SSL)...$(NC)"
-	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) down
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) down
 
 reset-containers: ## Force remove stale project containers by name
 	@echo "$(YELLOW)Removing stale project containers...$(NC)"
@@ -168,11 +170,13 @@ cert: ## Generate self-signed SSL certificate
 	else \
 		echo "$(GREEN)Generating self-signed SSL certificate...$(NC)"; \
 		mkdir -p certs; \
+		SAN_LIST="DNS:$${GATEWAY_DOMAIN:-localhost},DNS:$${DOCS_DOMAIN:-localhost},DNS:localhost,IP:127.0.0.1"; \
 		openssl req -x509 -newkey rsa:4096 \
 			-keyout certs/server.key \
 			-out certs/server.crt \
 			-days 365 -nodes \
-			-subj "/CN=localhost"; \
+			-subj "/CN=$${GATEWAY_DOMAIN:-localhost}" \
+			-addext "subjectAltName=$$SAN_LIST"; \
 		echo "$(GREEN)✓ Certificate created: certs/server.crt$(NC)"; \
 		ls -lh certs/; \
 	fi
@@ -195,27 +199,63 @@ cert-regenerate: ## Regenerate SSL certificate (force)
 	@rm -f certs/server.crt certs/server.key
 	@$(MAKE) cert
 
+cert-trust-macos: cert ## Trust local self-signed certificate in macOS Keychain (requires sudo)
+	@echo "$(BLUE)Trusting certs/server.crt in macOS System keychain...$(NC)"
+	@sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/server.crt
+	@echo "$(GREEN)✓ Certificate trusted. You can now test without -k for matching domains.$(NC)"
+
+cert-untrust-macos: ## Remove trusted local certificate from macOS keychain
+	@echo "$(YELLOW)Removing certs/server.crt from macOS System keychain...$(NC)"
+	@sudo security delete-certificate -c "$${GATEWAY_DOMAIN:-localhost}" /Library/Keychains/System.keychain 2>/dev/null || true
+	@echo "$(GREEN)✓ Certificate removal attempted$(NC)"
+
 # ==================== API MANAGEMENT ====================
 
 api-key: ## Create a new API key (interactive)
 	@echo "$(BLUE)Creating API key...$(NC)"
 	@read -p "Enter key name (e.g., 'dev-key'): " name; \
 	read -p "Enter requests per minute limit (default: 100): " rpm; \
+	admin_secret=$$(grep -E '^ADMIN_SECRET=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$$(grep -E '^GATEWAY_PORT=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$${gateway_port:-8080}; \
+	if [ -z "$$admin_secret" ]; then echo "$(RED)ADMIN_SECRET missing in .env$(NC)"; exit 1; fi; \
 	rpm=$${rpm:-100}; \
-	curl -X POST http://localhost:8080/admin/keys \
-		-H 'X-Admin-Secret: change-me-in-production' \
+	curl -X POST http://localhost:$$gateway_port/admin/keys \
+		-H "X-Admin-Secret: $$admin_secret" \
 		-H 'Content-Type: application/json' \
 		-d "{\"name\":\"$$name\",\"requests_per_minute\":$$rpm}" | jq .
 
 api-key-list: ## List all API keys
 	@echo "$(BLUE)Listing API keys...$(NC)"
-	@curl -s -X GET http://localhost:8080/admin/keys \
-		-H 'X-Admin-Secret: change-me-in-production' | jq .
+	@admin_secret=$$(grep -E '^ADMIN_SECRET=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$$(grep -E '^GATEWAY_PORT=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$${gateway_port:-8080}; \
+	if [ -z "$$admin_secret" ]; then echo "$(RED)ADMIN_SECRET missing in .env$(NC)"; exit 1; fi; \
+	curl -s -X GET http://localhost:$$gateway_port/admin/keys \
+		-H "X-Admin-Secret: $$admin_secret" | jq .
 
 api-key-delete: ## Delete API key (requires key ID)
 	@read -p "Enter API key ID to delete: " id; \
-	curl -X DELETE http://localhost:8080/admin/keys/$$id \
-		-H 'X-Admin-Secret: change-me-in-production' | jq .
+	admin_secret=$$(grep -E '^ADMIN_SECRET=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$$(grep -E '^GATEWAY_PORT=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$${gateway_port:-8080}; \
+	if [ -z "$$admin_secret" ]; then echo "$(RED)ADMIN_SECRET missing in .env$(NC)"; exit 1; fi; \
+	curl -X DELETE http://localhost:$$gateway_port/admin/keys/$$id \
+		-H "X-Admin-Secret: $$admin_secret" | jq .
+
+api-key-update: ## Update API key settings (name/rpm/active)
+	@read -p "Enter API key ID to update: " id; \
+	read -p "Enter new name: " name; \
+	read -p "Enter new requests per minute: " rpm; \
+	read -p "Is active? (true/false): " active; \
+	admin_secret=$$(grep -E '^ADMIN_SECRET=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$$(grep -E '^GATEWAY_PORT=' .env | head -n1 | cut -d= -f2- | tr -d '"'); \
+	gateway_port=$${gateway_port:-8080}; \
+	if [ -z "$$admin_secret" ]; then echo "$(RED)ADMIN_SECRET missing in .env$(NC)"; exit 1; fi; \
+	curl -s -X PUT http://localhost:$$gateway_port/admin/keys/$$id \
+		-H "X-Admin-Secret: $$admin_secret" \
+		-H 'Content-Type: application/json' \
+		-d "{\"name\":\"$$name\",\"requests_per_minute\":$$rpm,\"is_active\":$$active}" | jq .
 
 api-health: ## Check API health
 	@echo "$(BLUE)Checking API health...$(NC)"
@@ -241,7 +281,7 @@ build: ## Build Go services only (no Docker)
 validate: ## Validate all docker-compose files
 	@echo "$(BLUE)Validating docker-compose files...$(NC)"
 	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) config > /dev/null && echo "$(GREEN)✓ HTTP compose valid$(NC)" || echo "$(RED)✗ HTTP compose invalid$(NC)"
-	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config > /dev/null && echo "$(GREEN)✓ HTTPS compose valid$(NC)" || echo "$(RED)✗ HTTPS compose invalid$(NC)"
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) config > /dev/null && echo "$(GREEN)✓ HTTPS compose valid$(NC)" || echo "$(RED)✗ HTTPS compose invalid$(NC)"
 
 compose-config: ## Show merged compose configuration (HTTP)
 	@echo "$(BLUE)HTTP Compose Configuration:$(NC)"
@@ -249,7 +289,7 @@ compose-config: ## Show merged compose configuration (HTTP)
 
 compose-config-https: ## Show merged compose configuration (HTTPS)
 	@echo "$(BLUE)HTTPS Compose Configuration:$(NC)"
-	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SWAGGER) $(ADMIN_UI) $(SSL) config
 
 docs-up: ## Start Swagger UI on http://localhost:8088
 	@echo "$(GREEN)Starting Swagger UI...$(NC)"
