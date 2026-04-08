@@ -5,14 +5,14 @@ Production-ready moderation and language processing stack with:
 - gateway-service (API key auth, rate limiting, admin key management)
 - api-service (internal proxy layer)
 - moderation-service (moderation, text transcription normalization, translation, audio transcription)
-- Ollama for local LLM inference
+- configurable LLM provider for text tasks (Ollama, OpenAI, Google GenAI)
 - PostgreSQL and Redis with host persistence
 - optional Kafka profile
 - Swagger docs and separate Admin UI
 
 ## Architecture
 
-Client -> Gateway -> API Service -> Moderation Service -> Ollama
+Client -> Gateway -> API Service -> Moderation Service -> LLM Provider (Ollama/OpenAI/Google GenAI)
 
 Support services:
 
@@ -138,6 +138,8 @@ Use it to:
 
 Important knobs:
 
+- `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY`
+- `OPENAI_API_KEY`, `GOOGLE_API_KEY`
 - `OLLAMA_MODEL`
 - `OLLAMA_CPUS`, `OLLAMA_MEM_LIMIT`, `OLLAMA_MEM_RESERVATION`
 - `MODERATION_CPUS`, `MODERATION_MEM_LIMIT`
@@ -184,6 +186,44 @@ Start Kafka profile:
 ```bash
 docker-compose -f compose/docker-compose.shared.yml --profile kafka up -d
 ```
+
+## LLM Provider Configuration
+
+Default provider is Ollama.
+
+Ollama:
+
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=gemma:2b
+LLM_BASE_URL=http://ollama:11434
+LLM_API_KEY=
+```
+
+OpenAI:
+
+```env
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=<your-openai-key>
+```
+
+Google GenAI (Gemini):
+
+```env
+LLM_PROVIDER=google
+LLM_MODEL=gemini-1.5-flash
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+LLM_API_KEY=<your-google-api-key>
+```
+
+You can also keep provider-specific keys in:
+
+- `OPENAI_API_KEY`
+- `GOOGLE_API_KEY`
+
+If `LLM_API_KEY` is empty, moderation-service automatically falls back to those provider-specific key names based on `LLM_PROVIDER`.
 
 ## Troubleshooting
 

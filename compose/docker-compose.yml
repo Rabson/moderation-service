@@ -64,6 +64,10 @@ services:
       MODERATION_PORT: ${MODERATION_PORT:-8081}
       MODERATION_REQUEST_TIMEOUT: ${MODERATION_REQUEST_TIMEOUT:-90s}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-60s}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
+      LLM_MODEL: ${LLM_MODEL:-gemma:2b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       CACHE_TTL: ${CACHE_TTL:-10m}
       REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
@@ -79,10 +83,6 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
     ports:
       - "8081:8081"
     healthcheck:

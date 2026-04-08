@@ -18,9 +18,11 @@ import (
 )
 
 type Client struct {
-	baseURL string
-	model   string
-	http    *http.Client
+	provider string
+	baseURL  string
+	model    string
+	apiKey   string
+	http     *http.Client
 }
 
 type generateRequest struct {
@@ -37,6 +39,52 @@ type generateResponse struct {
 	Response string `json:"response"`
 }
 
+type openAIChatRequest struct {
+	Model          string              `json:"model"`
+	Messages       []openAIMessage     `json:"messages"`
+	Temperature    float64             `json:"temperature"`
+	ResponseFormat *openAIResponseType `json:"response_format,omitempty"`
+}
+
+type openAIMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type openAIResponseType struct {
+	Type string `json:"type"`
+}
+
+type openAIChatResponse struct {
+	Choices []struct {
+		Message struct {
+			Content any `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+}
+
+type googleGenerateContentRequest struct {
+	Contents []struct {
+		Parts []struct {
+			Text string `json:"text"`
+		} `json:"parts"`
+	} `json:"contents"`
+	GenerationConfig struct {
+		Temperature      float64 `json:"temperature"`
+		ResponseMimeType string  `json:"responseMimeType,omitempty"`
+	} `json:"generationConfig"`
+}
+
+type googleGenerateContentResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+}
+
 type llmResponse struct {
 	Labels moderation.Labels `json:"labels"`
 }
@@ -45,58 +93,30 @@ type textResponse struct {
 	Text string `json:"text"`
 }
 
-func NewClient(baseURL, model string, timeout time.Duration) *Client {
+func NewClient(provider, baseURL, model, apiKey string, timeout time.Duration) *Client {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		provider = "ollama"
+	}
+
 	return &Client{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
-		model:   model,
-		http:    &http.Client{Timeout: timeout},
+		provider: provider,
+		baseURL:  strings.TrimSuffix(baseURL, "/"),
+		model:    model,
+		apiKey:   strings.TrimSpace(apiKey),
+		http:     &http.Client{Timeout: timeout},
 	}
 }
 
 func (c *Client) Classify(ctx context.Context, text string) (moderation.Labels, error) {
 	prompt := buildPrompt(text)
 
-	body := generateRequest{
-		Model:  c.model,
-		Prompt: prompt,
-		Stream: false,
-		Format: "json",
-	}
-	body.Options.Temperature = 0
-
-	payload, err := json.Marshal(body)
+	raw, err := c.generateJSON(ctx, prompt)
 	if err != nil {
-		return moderation.Labels{}, fmt.Errorf("marshal ollama request: %w", err)
+		return moderation.Labels{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/generate", bytes.NewReader(payload))
-	if err != nil {
-		return moderation.Labels{}, fmt.Errorf("create ollama request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return moderation.Labels{}, fmt.Errorf("call ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return moderation.Labels{}, fmt.Errorf("ollama status=%d body=%s", resp.StatusCode, string(body))
-	}
-
-	responseBytes, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		return moderation.Labels{}, fmt.Errorf("read ollama response: %w", err)
-	}
-
-	var raw generateResponse
-	if err := json.Unmarshal(responseBytes, &raw); err != nil {
-		return moderation.Labels{}, fmt.Errorf("decode ollama envelope: %w", err)
-	}
-
-	parsed, err := parseStrictJSON(raw.Response)
+	parsed, err := parseStrictJSON(raw)
 	if err != nil {
 		return moderation.Labels{}, err
 	}
@@ -222,6 +242,19 @@ func (c *Client) TranscribeAudio(ctx context.Context, audioBase64, format, langu
 }
 
 func (c *Client) generateJSON(ctx context.Context, prompt string) (string, error) {
+	switch c.provider {
+	case "ollama":
+		return c.generateJSONWithOllama(ctx, prompt)
+	case "openai":
+		return c.generateJSONWithOpenAI(ctx, prompt)
+	case "google":
+		return c.generateJSONWithGoogle(ctx, prompt)
+	default:
+		return "", fmt.Errorf("unsupported LLM provider: %s", c.provider)
+	}
+}
+
+func (c *Client) generateJSONWithOllama(ctx context.Context, prompt string) (string, error) {
 	body := generateRequest{
 		Model:  c.model,
 		Prompt: prompt,
@@ -263,6 +296,147 @@ func (c *Client) generateJSON(ctx context.Context, prompt string) (string, error
 	}
 
 	return raw.Response, nil
+}
+
+func (c *Client) generateJSONWithOpenAI(ctx context.Context, prompt string) (string, error) {
+	if strings.TrimSpace(c.apiKey) == "" {
+		return "", fmt.Errorf("LLM_API_KEY is required for openai provider")
+	}
+
+	body := openAIChatRequest{
+		Model:       c.model,
+		Messages:    []openAIMessage{{Role: "user", Content: prompt}},
+		Temperature: 0,
+		ResponseFormat: &openAIResponseType{
+			Type: "json_object",
+		},
+	}
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal openai request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("create openai request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("call openai: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return "", fmt.Errorf("read openai response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("openai status=%d body=%s", resp.StatusCode, string(respBody))
+	}
+
+	var out openAIChatResponse
+	if err := json.Unmarshal(respBody, &out); err != nil {
+		return "", fmt.Errorf("decode openai response: %w", err)
+	}
+	if len(out.Choices) == 0 {
+		return "", fmt.Errorf("openai returned no choices")
+	}
+
+	content := extractOpenAIContent(out.Choices[0].Message.Content)
+	if strings.TrimSpace(content) == "" {
+		return "", fmt.Errorf("openai returned empty content")
+	}
+
+	return content, nil
+}
+
+func (c *Client) generateJSONWithGoogle(ctx context.Context, prompt string) (string, error) {
+	if strings.TrimSpace(c.apiKey) == "" {
+		return "", fmt.Errorf("LLM_API_KEY is required for google provider")
+	}
+
+	body := googleGenerateContentRequest{}
+	body.Contents = []struct {
+		Parts []struct {
+			Text string `json:"text"`
+		} `json:"parts"`
+	}{
+		{
+			Parts: []struct {
+				Text string `json:"text"`
+			}{
+				{Text: prompt},
+			},
+		},
+	}
+	body.GenerationConfig.Temperature = 0
+	body.GenerationConfig.ResponseMimeType = "application/json"
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal google request: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, c.model, c.apiKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("create google request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("call google: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return "", fmt.Errorf("read google response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("google status=%d body=%s", resp.StatusCode, string(respBody))
+	}
+
+	var out googleGenerateContentResponse
+	if err := json.Unmarshal(respBody, &out); err != nil {
+		return "", fmt.Errorf("decode google response: %w", err)
+	}
+	if len(out.Candidates) == 0 || len(out.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("google returned no candidates")
+	}
+
+	content := strings.TrimSpace(out.Candidates[0].Content.Parts[0].Text)
+	if content == "" {
+		return "", fmt.Errorf("google returned empty content")
+	}
+
+	return content, nil
+}
+
+func extractOpenAIContent(content any) string {
+	switch v := content.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			obj, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if text, ok := obj["text"].(string); ok && strings.TrimSpace(text) != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.TrimSpace(strings.Join(parts, "\n"))
+	default:
+		return ""
+	}
 }
 
 func buildPrompt(text string) string {

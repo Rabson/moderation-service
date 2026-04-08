@@ -48,7 +48,7 @@ func main() {
 	defer postgres.Close()
 
 	cache := storage.NewCache(redisClient, cfg.CacheTTL)
-	llmClient := llm.NewClient(cfg.OllamaBaseURL, cfg.OllamaModel, cfg.LLMTimeout)
+	llmClient := llm.NewClient(cfg.LLMProvider, cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMAPIKey, cfg.LLMTimeout)
 	producer := kafka.NewProducer(cfg.KafkaEnabled, cfg.KafkaBrokers, cfg.KafkaTopic)
 	defer func() {
 		if err := producer.Close(); err != nil {
