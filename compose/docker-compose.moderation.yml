@@ -13,17 +13,11 @@ services:
       MODERATION_PORT: ${MODERATION_PORT:-8081}
       MODERATION_REQUEST_TIMEOUT: ${MODERATION_REQUEST_TIMEOUT:-90s}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-60s}
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
-      LLM_MODEL: ${LLM_MODEL:-gemma:2b}
-      LLM_API_KEY: ${LLM_API_KEY:-}
       CACHE_TTL: ${CACHE_TTL:-10m}
       REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: ${REDIS_DB:-0}
       POSTGRES_DSN: ${POSTGRES_DSN:-postgres://moderation:moderation@postgres:5432/moderation?sslmode=disable}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma:2b}
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:9092}
       KAFKA_TOPIC: ${KAFKA_TOPIC:-moderation-events}
@@ -48,7 +42,7 @@ services:
     mem_limit: ${OLLAMA_MEM_LIMIT:-6g}
     mem_reservation: ${OLLAMA_MEM_RESERVATION:-4g}
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma:2b}
+      OLLAMA_MODEL: ${LLM_MODERATE_MODEL:-gemma:2b}
     ports:
       - "11434:11434"
     volumes:
@@ -73,9 +67,9 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma:2b}
+      OLLAMA_MODEL: ${LLM_MODERATE_MODEL:-gemma:2b}
     entrypoint: ["/bin/sh", "-c"]
-    command: ["ollama pull ${OLLAMA_MODEL:-gemma:2b}"]
+    command: ["ollama pull ${LLM_MODERATE_MODEL:-gemma:2b}"]
     restart: "no"
     volumes:
       - ollama-data:/root/.ollama

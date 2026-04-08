@@ -12,10 +12,6 @@ type Config struct {
 	Port           string
 	RequestTimeout time.Duration
 	LLMTimeout     time.Duration
-	LLMProvider    string
-	LLMBaseURL     string
-	LLMModel       string
-	LLMAPIKey      string
 	CacheTTL       time.Duration
 	RedisAddr      string
 	RedisPassword  string
@@ -31,10 +27,6 @@ func Load() (Config, error) {
 		Port:           getEnv("MODERATION_PORT", "8081"),
 		RequestTimeout: getDurationEnv("MODERATION_REQUEST_TIMEOUT", 8*time.Second),
 		LLMTimeout:     getDurationEnv("LLM_TIMEOUT", 6*time.Second),
-		LLMProvider:    strings.ToLower(strings.TrimSpace(getEnv("LLM_PROVIDER", "ollama"))),
-		LLMBaseURL:     strings.TrimSuffix(strings.TrimSpace(getEnv("LLM_BASE_URL", getEnv("OLLAMA_BASE_URL", ""))), "/"),
-		LLMModel:       strings.TrimSpace(getEnv("LLM_MODEL", getEnv("OLLAMA_MODEL", ""))),
-		LLMAPIKey:      strings.TrimSpace(getEnv("LLM_API_KEY", "")),
 		CacheTTL:       getDurationEnv("CACHE_TTL", 10*time.Minute),
 		RedisAddr:      getEnv("REDIS_ADDR", "redis:6379"),
 		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
@@ -47,48 +39,6 @@ func Load() (Config, error) {
 
 	if cfg.PostgresDSN == "" {
 		return Config{}, fmt.Errorf("POSTGRES_DSN is required")
-	}
-	if cfg.LLMProvider == "" {
-		cfg.LLMProvider = "ollama"
-	}
-
-	switch cfg.LLMProvider {
-	case "ollama":
-		if cfg.LLMBaseURL == "" {
-			cfg.LLMBaseURL = "http://ollama:11434"
-		}
-		if cfg.LLMModel == "" {
-			cfg.LLMModel = "gemma:2b"
-		}
-	case "openai":
-		if cfg.LLMBaseURL == "" {
-			cfg.LLMBaseURL = strings.TrimSuffix(strings.TrimSpace(getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1")), "/")
-		}
-		if cfg.LLMModel == "" {
-			cfg.LLMModel = "gpt-4o-mini"
-		}
-		if cfg.LLMAPIKey == "" {
-			cfg.LLMAPIKey = strings.TrimSpace(getEnv("OPENAI_API_KEY", ""))
-		}
-		if cfg.LLMAPIKey == "" {
-			return Config{}, fmt.Errorf("LLM_API_KEY or OPENAI_API_KEY is required when LLM_PROVIDER=openai")
-		}
-	case "google", "google-genai", "genai", "gemini":
-		cfg.LLMProvider = "google"
-		if cfg.LLMBaseURL == "" {
-			cfg.LLMBaseURL = strings.TrimSuffix(strings.TrimSpace(getEnv("GOOGLE_GENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")), "/")
-		}
-		if cfg.LLMModel == "" {
-			cfg.LLMModel = "gemini-1.5-flash"
-		}
-		if cfg.LLMAPIKey == "" {
-			cfg.LLMAPIKey = strings.TrimSpace(getEnv("GOOGLE_API_KEY", ""))
-		}
-		if cfg.LLMAPIKey == "" {
-			return Config{}, fmt.Errorf("LLM_API_KEY or GOOGLE_API_KEY is required when LLM_PROVIDER=google")
-		}
-	default:
-		return Config{}, fmt.Errorf("unsupported LLM_PROVIDER: %s", cfg.LLMProvider)
 	}
 	if cfg.KafkaEnabled && len(cfg.KafkaBrokers) == 0 {
 		return Config{}, fmt.Errorf("KAFKA_BROKERS must be set when KAFKA_ENABLED=true")

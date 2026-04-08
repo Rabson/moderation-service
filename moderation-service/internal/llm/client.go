@@ -25,6 +25,22 @@ type Client struct {
 	http     *http.Client
 }
 
+type providerConfig struct {
+	Provider string
+	BaseURL  string
+	Model    string
+	APIKey   string
+}
+
+type taskType string
+
+const (
+	taskModerate        taskType = "moderate"
+	taskTranscribe      taskType = "transcribe"
+	taskTranscribeAudio taskType = "transcribe_audio"
+	taskTranslate       taskType = "translate"
+)
+
 type generateRequest struct {
 	Model   string `json:"model"`
 	Prompt  string `json:"prompt"`
@@ -93,25 +109,24 @@ type textResponse struct {
 	Text string `json:"text"`
 }
 
-func NewClient(provider, baseURL, model, apiKey string, timeout time.Duration) *Client {
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	if provider == "" {
-		provider = "ollama"
+func NewClient(timeout time.Duration) (*Client, error) {
+	c := &Client{
+		http: &http.Client{Timeout: timeout},
 	}
 
-	return &Client{
-		provider: provider,
-		baseURL:  strings.TrimSuffix(baseURL, "/"),
-		model:    model,
-		apiKey:   strings.TrimSpace(apiKey),
-		http:     &http.Client{Timeout: timeout},
+	for _, task := range []taskType{taskModerate, taskTranscribe, taskTranscribeAudio, taskTranslate} {
+		if _, err := c.providerConfigForTask(task); err != nil {
+			return nil, err
+		}
 	}
+
+	return c, nil
 }
 
 func (c *Client) Classify(ctx context.Context, text string) (moderation.Labels, error) {
 	prompt := buildPrompt(text)
 
-	raw, err := c.generateJSON(ctx, prompt)
+	raw, err := c.generateJSONForTask(ctx, prompt, taskModerate)
 	if err != nil {
 		return moderation.Labels{}, err
 	}
@@ -126,7 +141,7 @@ func (c *Client) Classify(ctx context.Context, text string) (moderation.Labels, 
 
 func (c *Client) Transcribe(ctx context.Context, text string) (string, error) {
 	prompt := buildTranscribePrompt(text)
-	raw, err := c.generateJSON(ctx, prompt)
+	raw, err := c.generateJSONForTask(ctx, prompt, taskTranscribe)
 	if err != nil {
 		return "", err
 	}
@@ -141,7 +156,7 @@ func (c *Client) Transcribe(ctx context.Context, text string) (string, error) {
 
 func (c *Client) Translate(ctx context.Context, text, targetLanguage string) (string, error) {
 	prompt := buildTranslatePrompt(text, targetLanguage)
-	raw, err := c.generateJSON(ctx, prompt)
+	raw, err := c.generateJSONForTask(ctx, prompt, taskTranslate)
 	if err != nil {
 		return "", err
 	}
@@ -155,25 +170,29 @@ func (c *Client) Translate(ctx context.Context, text, targetLanguage string) (st
 }
 
 func (c *Client) TranscribeAudio(ctx context.Context, audioBase64, format, language string) (string, error) {
-	provider := strings.ToLower(strings.TrimSpace(os.Getenv("STT_PROVIDER")))
-	if provider == "" {
-		provider = "openai"
+	cfg, err := c.providerConfigForTask(taskTranscribeAudio)
+	if err != nil {
+		return "", err
 	}
-	if provider != "openai" {
-		return "", fmt.Errorf("unsupported STT_PROVIDER: %s", provider)
+	switch cfg.Provider {
+	case "openai":
+		return c.transcribeAudioWithOpenAI(ctx, audioBase64, format, language, cfg)
+	default:
+		return "", fmt.Errorf("unsupported audio transcription provider: %s", cfg.Provider)
+	}
+}
+
+func (c *Client) transcribeAudioWithOpenAI(ctx context.Context, audioBase64, format, language string, cfg providerConfig) (string, error) {
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		return "", fmt.Errorf("LLM_TRANSCRIBE_AUDIO_API_KEY or OPENAI_API_KEY is required for audio transcription")
 	}
 
-	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
-	if apiKey == "" {
-		return "", fmt.Errorf("OPENAI_API_KEY is required for audio transcription")
-	}
-
-	baseURL := strings.TrimSuffix(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/")
+	baseURL := strings.TrimSuffix(strings.TrimSpace(cfg.BaseURL), "/")
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
 
-	model := strings.TrimSpace(os.Getenv("OPENAI_AUDIO_MODEL"))
+	model := strings.TrimSpace(cfg.Model)
 	if model == "" {
 		model = "gpt-4o-mini-transcribe"
 	}
@@ -211,7 +230,7 @@ func (c *Client) TranscribeAudio(ctx context.Context, audioBase64, format, langu
 	if err != nil {
 		return "", fmt.Errorf("create transcribe request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := c.http.Do(req)
@@ -239,6 +258,97 @@ func (c *Client) TranscribeAudio(ctx context.Context, audioBase64, format, langu
 	}
 
 	return strings.TrimSpace(out.Text), nil
+}
+
+func (c *Client) generateJSONForTask(ctx context.Context, prompt string, task taskType) (string, error) {
+	cfg, err := c.providerConfigForTask(task)
+	if err != nil {
+		return "", err
+	}
+	taskClient := *c
+	taskClient.provider = cfg.Provider
+	taskClient.baseURL = cfg.BaseURL
+	taskClient.model = cfg.Model
+	taskClient.apiKey = cfg.APIKey
+	return taskClient.generateJSON(ctx, prompt)
+}
+
+func (c *Client) providerConfigForTask(task taskType) (providerConfig, error) {
+	prefix := "LLM_" + strings.ToUpper(string(task)) + "_"
+
+	defaultProvider, defaultBaseURL, defaultModel := defaultTaskSettings(task)
+	defaultAPIKey := ""
+
+	provider := strings.ToLower(strings.TrimSpace(getEnvOrFallback(prefix+"PROVIDER", defaultProvider)))
+	if provider == "" {
+		provider = "ollama"
+	}
+
+	if _, ok := os.LookupEnv(prefix + "PROVIDER"); ok {
+		if err := validateProvider(prefix+"PROVIDER", provider); err != nil {
+			return providerConfig{}, err
+		}
+	}
+
+	baseURL := strings.TrimSuffix(strings.TrimSpace(getEnvOrFallback(prefix+"BASE_URL", defaultBaseURL)), "/")
+	model := strings.TrimSpace(getEnvOrFallback(prefix+"MODEL", defaultModel))
+	apiKey := strings.TrimSpace(getEnvOrFallback(prefix+"API_KEY", defaultAPIKey))
+
+	switch provider {
+	case "openai":
+		if baseURL == "" {
+			baseURL = strings.TrimSuffix(strings.TrimSpace(getEnvOrFallback("OPENAI_BASE_URL", "https://api.openai.com/v1")), "/")
+		}
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+		}
+	case "google":
+		if baseURL == "" {
+			baseURL = strings.TrimSuffix(strings.TrimSpace(getEnvOrFallback("GOOGLE_GENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")), "/")
+		}
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(os.Getenv("GOOGLE_API_KEY"))
+		}
+	case "ollama":
+		if baseURL == "" {
+			baseURL = "http://ollama:11434"
+		}
+	}
+
+	return providerConfig{
+		Provider: provider,
+		BaseURL:  baseURL,
+		Model:    model,
+		APIKey:   apiKey,
+	}, nil
+}
+
+func defaultTaskSettings(task taskType) (provider, baseURL, model string) {
+	switch task {
+	case taskTranscribeAudio:
+		return "openai", "https://api.openai.com/v1", "gpt-4o-mini-transcribe"
+	case taskModerate, taskTranscribe, taskTranslate:
+		return "ollama", "http://ollama:11434", "gemma:2b"
+	default:
+		return "ollama", "http://ollama:11434", "gemma:2b"
+	}
+}
+
+func validateProvider(envKey, provider string) error {
+	switch provider {
+	case "ollama", "openai", "google":
+		return nil
+	default:
+		return fmt.Errorf("invalid %s=%q; allowed values: ollama, openai, google", envKey, provider)
+	}
+}
+
+func getEnvOrFallback(key, fallback string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	return v
 }
 
 func (c *Client) generateJSON(ctx context.Context, prompt string) (string, error) {

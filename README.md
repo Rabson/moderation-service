@@ -138,9 +138,11 @@ Use it to:
 
 Important knobs:
 
-- `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY`
+- `LLM_MODERATE_PROVIDER`, `LLM_MODERATE_MODEL`, `LLM_MODERATE_BASE_URL`, `LLM_MODERATE_API_KEY`
+- `LLM_TRANSCRIBE_PROVIDER`, `LLM_TRANSCRIBE_MODEL`, `LLM_TRANSCRIBE_BASE_URL`, `LLM_TRANSCRIBE_API_KEY`
+- `LLM_TRANSLATE_PROVIDER`, `LLM_TRANSLATE_MODEL`, `LLM_TRANSLATE_BASE_URL`, `LLM_TRANSLATE_API_KEY`
+- `LLM_TRANSCRIBE_AUDIO_PROVIDER`, `LLM_TRANSCRIBE_AUDIO_MODEL`, `LLM_TRANSCRIBE_AUDIO_BASE_URL`, `LLM_TRANSCRIBE_AUDIO_API_KEY`
 - `OPENAI_API_KEY`, `GOOGLE_API_KEY`
-- `OLLAMA_MODEL`
 - `OLLAMA_CPUS`, `OLLAMA_MEM_LIMIT`, `OLLAMA_MEM_RESERVATION`
 - `MODERATION_CPUS`, `MODERATION_MEM_LIMIT`
 - `GATEWAY_CPUS`, `API_CPUS`
@@ -189,33 +191,32 @@ docker-compose -f compose/docker-compose.shared.yml --profile kafka up -d
 
 ## LLM Provider Configuration
 
-Default provider is Ollama.
-
-Ollama:
+Configure providers/models per endpoint type:
 
 ```env
-LLM_PROVIDER=ollama
-LLM_MODEL=gemma:2b
-LLM_BASE_URL=http://ollama:11434
-LLM_API_KEY=
-```
+# moderate
+LLM_MODERATE_PROVIDER=ollama
+LLM_MODERATE_MODEL=gemma:2b
+LLM_MODERATE_BASE_URL=http://ollama:11434
+LLM_MODERATE_API_KEY=
 
-OpenAI:
+# transcribe (text normalization)
+LLM_TRANSCRIBE_PROVIDER=ollama
+LLM_TRANSCRIBE_MODEL=gemma:2b
+LLM_TRANSCRIBE_BASE_URL=http://ollama:11434
+LLM_TRANSCRIBE_API_KEY=
 
-```env
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=<your-openai-key>
-```
+# translate
+LLM_TRANSLATE_PROVIDER=ollama
+LLM_TRANSLATE_MODEL=gemma:2b
+LLM_TRANSLATE_BASE_URL=http://ollama:11434
+LLM_TRANSLATE_API_KEY=
 
-Google GenAI (Gemini):
-
-```env
-LLM_PROVIDER=google
-LLM_MODEL=gemini-1.5-flash
-LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-LLM_API_KEY=<your-google-api-key>
+# transcribe audio
+LLM_TRANSCRIBE_AUDIO_PROVIDER=openai
+LLM_TRANSCRIBE_AUDIO_MODEL=gpt-4o-mini-transcribe
+LLM_TRANSCRIBE_AUDIO_BASE_URL=https://api.openai.com/v1
+LLM_TRANSCRIBE_AUDIO_API_KEY=
 ```
 
 You can also keep provider-specific keys in:
@@ -223,10 +224,12 @@ You can also keep provider-specific keys in:
 - `OPENAI_API_KEY`
 - `GOOGLE_API_KEY`
 
-If `LLM_API_KEY` is empty, moderation-service automatically falls back to those provider-specific key names based on `LLM_PROVIDER`.
+If a task-specific `*_API_KEY` is empty, moderation-service falls back to provider-specific keys (`OPENAI_API_KEY` or `GOOGLE_API_KEY`).
+
+These let you use different models/providers per endpoint type (`/moderate`, `/transcribe`, `/transcribe/audio`).
 
 ## Troubleshooting
 
 - If browser calls fail from Swagger/Admin UI, ensure `CORS_ALLOWED_ORIGINS` includes the UI origin(s).
 - If SSL stack fails on ports 80/443, another process is using those ports.
-- If audio transcription returns provider errors, set `OPENAI_API_KEY` and related STT env values.
+- If audio transcription returns provider errors, set `LLM_TRANSCRIBE_AUDIO_PROVIDER`, `LLM_TRANSCRIBE_AUDIO_API_KEY`, and `OPENAI_API_KEY` as needed.
