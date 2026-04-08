@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -64,13 +65,18 @@ func (s *Store) GenerateKey() (string, error) {
 
 func (s *Store) Validate(ctx context.Context, plaintextKey string) (*APIKey, error) {
 	keyHash := s.Hash(plaintextKey)
-
 	cacheKey := fmt.Sprintf("apikey:%s", keyHash)
-	_, err := s.cache.Get(ctx, cacheKey).Result()
+
+	// Try to get from cache
+	cachedData, err := s.cache.Get(ctx, cacheKey).Result()
 	if err == nil {
-		return &APIKey{KeyHash: keyHash}, nil
+		var key APIKey
+		if err := json.Unmarshal([]byte(cachedData), &key); err == nil {
+			return &key, nil
+		}
 	}
 
+	// Cache miss or unmarshal error: query database
 	var id string
 	var name string
 	var rpm int
@@ -90,8 +96,10 @@ func (s *Store) Validate(ctx context.Context, plaintextKey string) (*APIKey, err
 
 	key := &APIKey{ID: id, Name: name, KeyHash: keyHash, RequestsPerMinute: rpm, IsActive: isActive}
 
-	_ = s.cache.Set(ctx, cacheKey, "1", 0)
-	_ = s.cache.Expire(ctx, cacheKey, time.Duration(s.ttl)*time.Second)
+	// Cache the full APIKey as JSON
+	if data, err := json.Marshal(key); err == nil {
+		_ = s.cache.Set(ctx, cacheKey, data, time.Duration(s.ttl)*time.Second)
+	}
 
 	return key, nil
 }
