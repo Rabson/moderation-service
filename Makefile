@@ -1,4 +1,4 @@
-.PHONY: help start start-http start-https start-moderation stop down reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check cert-trust-macos cert-untrust-macos api-key api-key-update test validate build compose-config ps status
+.PHONY: help start start-http start-https start-moderation stop down reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx clean cert cert-check cert-trust-macos cert-untrust-macos cert-trust-linux cert-untrust-linux api-key api-key-update test validate build compose-config ps status
 
 # Color output
 BLUE := \033[0;34m
@@ -208,6 +208,36 @@ cert-untrust-macos: ## Remove trusted local certificate from macOS keychain
 	@echo "$(YELLOW)Removing certs/server.crt from macOS System keychain...$(NC)"
 	@sudo security delete-certificate -c "$${GATEWAY_DOMAIN:-localhost}" /Library/Keychains/System.keychain 2>/dev/null || true
 	@echo "$(GREEN)✓ Certificate removal attempted$(NC)"
+
+cert-trust-linux: cert ## Trust local self-signed cert on Linux (Debian/Ubuntu/RHEL/Fedora)
+	@echo "$(BLUE)Trusting certs/server.crt on Linux CA store...$(NC)"
+	@if command -v update-ca-certificates >/dev/null 2>&1; then \
+		sudo cp certs/server.crt /usr/local/share/ca-certificates/moderation-llm.crt; \
+		sudo update-ca-certificates; \
+		echo "$(GREEN)✓ Trusted via update-ca-certificates$(NC)"; \
+	elif command -v update-ca-trust >/dev/null 2>&1; then \
+		sudo cp certs/server.crt /etc/pki/ca-trust/source/anchors/moderation-llm.crt; \
+		sudo update-ca-trust extract; \
+		echo "$(GREEN)✓ Trusted via update-ca-trust$(NC)"; \
+	else \
+		echo "$(RED)No supported CA update tool found (update-ca-certificates/update-ca-trust).$(NC)"; \
+		exit 1; \
+	fi
+
+cert-untrust-linux: ## Remove trusted local cert from Linux CA store
+	@echo "$(YELLOW)Removing trusted local cert from Linux CA store...$(NC)"
+	@if command -v update-ca-certificates >/dev/null 2>&1; then \
+		sudo rm -f /usr/local/share/ca-certificates/moderation-llm.crt; \
+		sudo update-ca-certificates --fresh; \
+		echo "$(GREEN)✓ Removed from update-ca-certificates store$(NC)"; \
+	elif command -v update-ca-trust >/dev/null 2>&1; then \
+		sudo rm -f /etc/pki/ca-trust/source/anchors/moderation-llm.crt; \
+		sudo update-ca-trust extract; \
+		echo "$(GREEN)✓ Removed from update-ca-trust store$(NC)"; \
+	else \
+		echo "$(RED)No supported CA update tool found (update-ca-certificates/update-ca-trust).$(NC)"; \
+		exit 1; \
+	fi
 
 # ==================== API MANAGEMENT ====================
 

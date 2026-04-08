@@ -101,6 +101,8 @@ make test
 - `make api-key-update` update existing key (name/rpm/active)
 - `make cert-trust-macos` trust generated self-signed cert in macOS keychain
 - `make cert-untrust-macos` remove trusted local cert from macOS keychain
+- `make cert-trust-linux` trust generated self-signed cert on Linux
+- `make cert-untrust-linux` remove trusted local cert from Linux
 
 Admin key Make commands (`api-key`, `api-key-list`, `api-key-update`, `api-key-delete`) read `ADMIN_SECRET` and `GATEWAY_PORT` from `.env` automatically.
 
@@ -240,4 +242,4 @@ These let you use different models/providers per endpoint type (`/moderate`, `/t
 - If browser calls fail from Swagger/Admin UI, ensure `CORS_ALLOWED_ORIGINS` includes the UI origin(s).
 - If SSL stack fails on ports 80/443, another process is using those ports.
 - If audio transcription returns provider errors, set `LLM_TRANSCRIBE_AUDIO_PROVIDER`, `LLM_TRANSCRIBE_AUDIO_API_KEY`, and `OPENAI_API_KEY` as needed.
-- If `curl` fails with self-signed certificate, run `make cert-trust-macos` (macOS) or use `curl --cacert certs/server.crt ...`.
+- If `curl` fails with self-signed certificate, run `make cert-trust-macos` (macOS) or `make cert-trust-linux` (Linux), or use `curl --cacert certs/server.crt ...`.
