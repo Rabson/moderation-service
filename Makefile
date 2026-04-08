@@ -16,6 +16,12 @@ SWAGGER := -f compose/docker-compose.swagger.yml
 ADMIN_UI := -f compose/docker-compose.admin-ui.yml
 BIN_DIR := bin
 
+# Compose command auto-detection (supports both plugin and standalone)
+DOCKER_COMPOSE ?= $(shell command -v docker-compose >/dev/null 2>&1 && echo docker-compose || (docker compose version >/dev/null 2>&1 && echo "docker compose"))
+ifeq ($(strip $(DOCKER_COMPOSE)),)
+$(error Neither 'docker-compose' nor 'docker compose' is available. Install Docker with Compose support)
+endif
+
 # Default target
 .DEFAULT_GOAL := help
 
@@ -49,21 +55,21 @@ start: start-http ## Start all services (HTTP - default)
 start-http: validate ## Start with HTTP (port 8080)
 	@echo "$(GREEN)Starting all services (HTTP)...$(NC)"
 	@echo "Gateway will be available at: http://localhost:8080"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) up --build
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) up --build
 
 start-https: cert validate ## Start with HTTPS (port 443, requires SSL cert)
 	@echo "$(GREEN)Starting all services (HTTPS)...$(NC)"
 	@echo "Gateway will be available at: https://localhost:443"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) up --build
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) up --build
 
 start-moderation: validate ## Start moderation stack only (no gateway)
 	@echo "$(GREEN)Starting moderation stack (without gateway)...$(NC)"
 	@echo "Moderation service available at: http://localhost:8081"
-	docker-compose $(SHARED) $(MODERATION) up --build
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) up --build
 
 up-build-daemon: validate ## Run: docker-compose ... up --build -d
 	@echo "$(GREEN)Starting all services in detached mode...$(NC)"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) up --build -d
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) up --build -d
 
 up-core-daemon: up-build-daemon ## Alias: start core stack in detached mode
 
@@ -75,15 +81,15 @@ start-daemon: up-build-daemon ## Start all services in background
 
 stop: ## Stop all running services
 	@echo "$(YELLOW)Stopping all services...$(NC)"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) stop
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) stop
 
 down: ## Stop and remove all containers
 	@echo "$(YELLOW)Stopping and removing containers...$(NC)"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) down
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) down
 
 down-ssl: ## Stop services including SSL proxy
 	@echo "$(YELLOW)Stopping all services (including SSL)...$(NC)"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) down
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) down
 
 reset-containers: ## Force remove stale project containers by name
 	@echo "$(YELLOW)Removing stale project containers...$(NC)"
@@ -92,7 +98,7 @@ reset-containers: ## Force remove stale project containers by name
 
 clean: down ## Clean: stop containers and remove volumes
 	@echo "$(RED)Cleaning up: removing volumes...$(NC)"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) down -v
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) down -v
 	@echo "$(GREEN)✓ Cleanup complete$(NC)"
 
 clean-all: clean ## Complete cleanup (same as 'clean')
@@ -106,7 +112,7 @@ remove-images: ## Remove all project images
 
 logs: ## View logs from all services
 	@echo "$(BLUE)Showing logs from all services...$(NC)"
-	docker-compose $(SHARED) $(MODERATION) $(GATEWAY) logs -f
+	$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) logs -f
 
 logs-gateway: ## View gateway-service logs
 	@echo "$(BLUE)Gateway logs:$(NC)"
@@ -234,37 +240,37 @@ build: ## Build Go services only (no Docker)
 
 validate: ## Validate all docker-compose files
 	@echo "$(BLUE)Validating docker-compose files...$(NC)"
-	@docker-compose $(SHARED) $(MODERATION) $(GATEWAY) config > /dev/null && echo "$(GREEN)✓ HTTP compose valid$(NC)" || echo "$(RED)✗ HTTP compose invalid$(NC)"
-	@docker-compose $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config > /dev/null && echo "$(GREEN)✓ HTTPS compose valid$(NC)" || echo "$(RED)✗ HTTPS compose invalid$(NC)"
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) config > /dev/null && echo "$(GREEN)✓ HTTP compose valid$(NC)" || echo "$(RED)✗ HTTP compose invalid$(NC)"
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config > /dev/null && echo "$(GREEN)✓ HTTPS compose valid$(NC)" || echo "$(RED)✗ HTTPS compose invalid$(NC)"
 
 compose-config: ## Show merged compose configuration (HTTP)
 	@echo "$(BLUE)HTTP Compose Configuration:$(NC)"
-	@docker-compose $(SHARED) $(MODERATION) $(GATEWAY) config
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) config
 
 compose-config-https: ## Show merged compose configuration (HTTPS)
 	@echo "$(BLUE)HTTPS Compose Configuration:$(NC)"
-	@docker-compose $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config
+	@$(DOCKER_COMPOSE) $(SHARED) $(MODERATION) $(GATEWAY) $(SSL) config
 
 docs-up: ## Start Swagger UI on http://localhost:8088
 	@echo "$(GREEN)Starting Swagger UI...$(NC)"
-	docker-compose $(SWAGGER) up -d
+	$(DOCKER_COMPOSE) $(SWAGGER) up -d
 	@echo "Swagger UI: http://localhost:8088"
 
 docs-down: ## Stop Swagger UI
 	@echo "$(YELLOW)Stopping Swagger UI...$(NC)"
-	docker-compose $(SWAGGER) down
+	$(DOCKER_COMPOSE) $(SWAGGER) down
 
 docs-openapi: ## Print OpenAPI spec file path
 	@echo "OpenAPI spec: deploy/swagger/openapi.yaml"
 
 admin-ui-up: ## Start Admin UI on http://localhost:8090
 	@echo "$(GREEN)Starting Admin UI...$(NC)"
-	docker-compose $(ADMIN_UI) up -d
+	$(DOCKER_COMPOSE) $(ADMIN_UI) up -d
 	@echo "Admin UI: http://localhost:8090"
 
 admin-ui-down: ## Stop Admin UI
 	@echo "$(YELLOW)Stopping Admin UI...$(NC)"
-	docker-compose $(ADMIN_UI) down
+	$(DOCKER_COMPOSE) $(ADMIN_UI) down
 
 test: ## Run health checks on all services
 	@echo "$(BLUE)Running health checks...$(NC)"
@@ -307,7 +313,7 @@ test-batch: ## Test batch moderation endpoint
 version: ## Show versions of key components
 	@echo "$(BLUE)Component Versions:$(NC)"
 	@echo "Docker: $$(docker --version)"
-	@echo "Docker Compose: $$(docker-compose --version)"
+	@echo "Docker Compose: $$($(DOCKER_COMPOSE) version)"
 	@echo "Go: $$(go version 2>/dev/null || echo 'not installed')"
 	@echo "OpenSSL: $$(openssl version)"
 
