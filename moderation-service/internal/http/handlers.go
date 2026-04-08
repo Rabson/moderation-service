@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -29,7 +30,7 @@ func (s *Server) moderate(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.engine.Moderate(r.Context(), middleware.GetReqID(r.Context()), req.Text)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		s.writeInternalError(w, r, http.StatusInternalServerError, "internal server error", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -59,7 +60,7 @@ func (s *Server) moderateBatch(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.engine.ModerateBatch(r.Context(), middleware.GetReqID(r.Context()), req.Texts)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		s.writeInternalError(w, r, http.StatusInternalServerError, "internal server error", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -80,7 +81,7 @@ func (s *Server) transcribe(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.engine.Transcribe(r.Context(), req.Text)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		s.writeInternalError(w, r, http.StatusBadGateway, "upstream service error", err)
 		return
 	}
 
@@ -105,7 +106,7 @@ func (s *Server) transcribeAudio(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.engine.TranscribeAudio(r.Context(), req.AudioBase64, req.Format, req.Language)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		s.writeInternalError(w, r, http.StatusBadGateway, "upstream service error", err)
 		return
 	}
 
@@ -132,7 +133,7 @@ func (s *Server) translate(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.engine.Translate(r.Context(), req.Text, req.TargetLanguage)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		s.writeInternalError(w, r, http.StatusBadGateway, "upstream service error", err)
 		return
 	}
 
@@ -147,4 +148,15 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func (s *Server) writeInternalError(w http.ResponseWriter, r *http.Request, status int, publicMsg string, err error) {
+	reqID := middleware.GetReqID(r.Context())
+	s.logger.Error("request failed",
+		slog.String("path", r.URL.Path),
+		slog.String("method", r.Method),
+		slog.String("request_id", reqID),
+		slog.String("error", err.Error()),
+	)
+	writeError(w, status, publicMsg)
 }

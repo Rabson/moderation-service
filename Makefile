@@ -1,4 +1,4 @@
-.PHONY: help start start-http start-https start-caddy start-moderation stop down down-caddy reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx logs-caddy clean cert cert-check cert-trust-macos cert-untrust-macos cert-trust-linux cert-untrust-linux api-key api-key-update test validate build compose-config compose-config-caddy ps status
+.PHONY: help start start-http start-https start-caddy start-moderation stop down down-caddy reset-containers logs logs-gateway logs-moderation logs-moderation-detail logs-ollama logs-nginx logs-caddy clean cert cert-check cert-trust-macos cert-untrust-macos cert-trust-linux cert-untrust-linux ollama-pull-models api-key api-key-update test validate build compose-config compose-config-caddy ps status
 
 # Color output
 BLUE := \033[0;34m
@@ -147,6 +147,20 @@ logs-api: ## View api-service logs
 logs-ollama: ## View ollama logs
 	@echo "$(BLUE)Ollama logs:$(NC)"
 	docker logs -f ollama --tail 50
+
+ollama-pull-models: ## Pull all Ollama models configured in .env
+	@echo "$(BLUE)Pulling Ollama models from .env...$(NC)"
+	@models="$$(grep -E '^LLM_(MODERATE|TRANSCRIBE|TRANSLATE)_MODEL=' .env | cut -d= -f2- | tr -d '"' | sort -u)"; \
+	if [ -z "$$models" ]; then \
+		echo "$(RED)No Ollama models found in .env$(NC)"; \
+		exit 1; \
+	fi; \
+	for m in $$models; do \
+		echo "$(GREEN)Pulling $$m...$(NC)"; \
+		docker exec ollama ollama pull $$m || exit 1; \
+	done; \
+	echo "$(GREEN)✓ Ollama model pull complete$(NC)"; \
+	docker exec ollama ollama list
 
 logs-redis: ## View redis logs
 	@echo "$(BLUE)Redis logs:$(NC)"

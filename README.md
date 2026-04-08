@@ -101,6 +101,7 @@ make test
 - `make start-caddy` start full stack with Caddy auto TLS (Let's Encrypt)
 - `make down-caddy` stop Caddy TLS stack
 - `make logs-caddy` view Caddy logs
+- `make ollama-pull-models` pull configured Ollama models from `.env`
 - `make api-key-update` update existing key (name/rpm/active)
 - `make cert-trust-macos` trust generated self-signed cert in macOS keychain
 - `make cert-untrust-macos` remove trusted local cert from macOS keychain
@@ -263,3 +264,4 @@ These let you use different models/providers per endpoint type (`/moderate`, `/t
 - If SSL stack fails on ports 80/443, another process is using those ports.
 - If audio transcription returns provider errors, set `LLM_TRANSCRIBE_AUDIO_PROVIDER`, `LLM_TRANSCRIBE_AUDIO_API_KEY`, and `OPENAI_API_KEY` as needed.
 - If `curl` fails with self-signed certificate, run `make cert-trust-macos` (macOS) or `make cert-trust-linux` (Linux), or use `curl --cacert certs/server.crt ...`.
+- If you get `ollama ... model 'X' not found`, run `make ollama-pull-models`, then restart moderation service (`docker restart moderation-service`).
